@@ -1,0 +1,34 @@
+from django.contrib.auth.models import Group, User
+from rest_framework import serializers
+
+
+class UserSerializer(serializers.HyperlinkedModelSerializer):
+    class Meta:
+        model = User
+        fields = ['url', 'username', 'email', 'groups']
+
+
+class GroupSerializer(serializers.HyperlinkedModelSerializer):
+    class Meta:
+        model = Group
+        fields = ['url', 'name']
+
+
+class ChangeVRFSerializer(serializers.Serializer):
+    user_tacacs = serializers.CharField(required=True, label="Usuario TACACS")
+    pass_tacacs = serializers.CharField(style={'input_type': 'password'}, label="Password TACACS")
+    router_pe = serializers.CharField(required=True, label="Equipo PE")
+    subinterace_pe = serializers.CharField(required=True, label="Subinterface del PE")
+    vrf_old = serializers.IntegerField(required=True, min_value=0, label="VRF actual", help_text="Ingresar la actual VRF que está en la subinterface")
+    vrf_new = serializers.IntegerField(required=True, min_value=0, label="VRF NUEVA", help_text="Ingresar la nueva VRF que se creará")
+    cliente = serializers.CharField(required=True, label="Cliente", help_text="Ingresar tal cual el grupo de la VRF, se buscará la vrf: RPVFM_cliente") 
+    asnumber = serializers.IntegerField(required=True, min_value=0, label="ASNUMBER PEER", help_text="Este ASNUMBER se buscará en el grupo de la VRF para validar si existe")
+    pass_cipher = serializers.CharField(required=True, label="Cipher Password")
+    commit = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear loas cambios?")
+
+
+class ChangeVrfFromExcelSerializer(serializers.Serializer):
+    user_tacacs = serializers.CharField(required=True, label="Usuario TACACS")
+    pass_tacacs = serializers.CharField(style={'input_type': 'password'}, label="Password TACACS")
+    commit = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear loas cambios?")
+    excel = serializers.FileField(allow_empty_file=False)

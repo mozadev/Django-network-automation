@@ -165,11 +165,20 @@ class SuspensionAndReconnectionView(viewsets.ViewSet):
                 action = "suspension"
                 suspension = True
             else:
-                action = "reconection"
+                action = "reconnection"
                 suspension = False
             
-            suspension_reconnection.to_router(action, user_tacacs, pass_tacacs, router_pe, subinterface_pe, suspension, commit)
-            return Response({"msg": "XD"})
+            msg = {}
+            msg["detail"], msg["status"], msg["url"] = suspension_reconnection.to_router(action, user_tacacs, pass_tacacs, router_pe, subinterface_pe, suspension, commit)
+            serializer.validated_data["pass_tacacs"] = "*************"
+            msg["data_ingresada"] = serializer.validated_data
+
+            if msg["status"] == 200:
+                return Response(msg, status=status.HTTP_200_OK)
+            else:
+                return Response(msg, status=status.HTTP_400_BAD_REQUEST)
+
+            
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

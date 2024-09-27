@@ -48,13 +48,6 @@ def commands_to_huawei(sub_interface, vrf_new, vrf_old, ip_interface, ip_vrf, ci
         {"prompt": "\]", "command": f" ip address {ip_interface} 30 "},
         {"prompt": "\]", "command": f" quit"},
         {"prompt": "\]", "command": f""},
-        # BORRAR ANTIGUA ASOCIACIÓN VRF - BGP
-        {"prompt": "\]", "command": f"bgp 12252"},
-        {"prompt": "\]", "command": f" ipv4-family vpn-instance {vrf_old_str}"},
-        {"prompt": "\]", "command": f"  undo peer {ip_vrf}"},
-        {"prompt": "\]", "command": f"  quit"},
-        {"prompt": "\]", "command": f" quit"},
-        {"prompt": "\]", "command": f""},
     ]
 
     bgp_group_not_found = [
@@ -79,6 +72,12 @@ def commands_to_huawei(sub_interface, vrf_new, vrf_old, ip_interface, ip_vrf, ci
         {"prompt": "\]", "command": f"  quit"},
         {"prompt": "\]", "command": f" quit"},
         {"prompt": "\]", "command": f""},
+        {"prompt": "\]", "command": f"bgp 12252"},
+        {"prompt": "\]", "command": f" ipv4-family vpn-instance {vrf_old_str}"},
+        {"prompt": "\]", "command": f"  undo peer {ip_vrf}"},
+        {"prompt": "N\]:", "command": commit},
+        {"prompt": "\]", "command": f"  quit"},
+        {"prompt": "\]", "command": f" quit"},
     ]
 
     bgp_group_found = [
@@ -91,12 +90,19 @@ def commands_to_huawei(sub_interface, vrf_new, vrf_old, ip_interface, ip_vrf, ci
         {"prompt": "\]", "command": f"  quit"},
         {"prompt": "\]", "command": f" quit"},
         {"prompt": "\]", "command": f""},
+        {"prompt": "\]", "command": f"bgp 12252"},
+        {"prompt": "\]", "command": f" ipv4-family vpn-instance {vrf_old_str}"},
+        {"prompt": "\]", "command": f"  undo peer {ip_vrf}"},
+        {"prompt": "N\]:", "command": commit},
+        {"prompt": "\]", "command": f"  quit"},
+        {"prompt": "\]", "command": f" quit"},
     ]
 
     commitear = [
         # Commitear
         {"prompt": "\]", "command": f"quit"},
         {"prompt": "\[Y\(yes\)\/N\(no\)\/C\(cancel\)\]:", "command": commit},
+
         # Validación final
         {"prompt": "\>", "command": f"dis curr int {sub_interface}"},
     ]

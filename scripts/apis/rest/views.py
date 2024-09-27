@@ -1,11 +1,12 @@
 from django.contrib.auth.models import Group, User
 from rest_framework import permissions, viewsets
 from rest_framework.views import APIView
-from rest.serializers import GroupSerializer, UserSerializer, ChangeVRFSerializer, ChangeVrfFromExcelSerializer
+from rest.serializers import GroupSerializer, UserSerializer, ChangeVRFSerializer, ChangeVrfFromExcelSerializer, SuspensionAndReconnectionSerializer
 from rest_framework.response import Response
 from rest_framework import status
-from rest.modules.utils import to_router, clean_excel_changevrf
-
+import rest.modules.update_vrf.utils as update_vrf
+import rest.modules.suspension.utils as suspension_reconnection
+# from rest.modules.update_vrf.util.commands
 
 class UserViewSet(viewsets.ModelViewSet):
     """
@@ -73,7 +74,7 @@ class ChangeVRFView(viewsets.ViewSet):
             msg = {}
             serializer.validated_data["pass_tacacs"] = "*************"
             msg["data_ingresada"] = serializer.validated_data
-            detail, status_code, url_file = to_router(action, user_tacacs, pass_tacacs, router_pe, subinterface_pe, vrf_new, vrf_old, cliente, asnumber, pass_cipher, commit)
+            detail, status_code, url_file = update_vrf.to_router(action, user_tacacs, pass_tacacs, router_pe, subinterface_pe, vrf_new, vrf_old, cliente, asnumber, pass_cipher, commit)
             msg["detail"] = detail
             msg["url_file"] = url_file
 
@@ -114,7 +115,7 @@ class ChangeVrfFromExcelView(viewsets.ViewSet):
             pass_tacacs = serializer.validated_data["pass_tacacs"]
             commit = serializer.validated_data["commit"]
             excel = serializer.validated_data["excel"]
-            cleaned_excel, status_code =  clean_excel_changevrf(excel)
+            cleaned_excel, status_code =  update_vrf.clean_excel_changevrf(excel)
             
             action = "change_vrf_from_excel"
 
@@ -129,7 +130,7 @@ class ChangeVrfFromExcelView(viewsets.ViewSet):
                     cliente = item["cliente"]
                     asnumber = item["asnumber"]
                     pass_cipher = item["pass_cipher"]
-                    result_item["detail"], result_item["status_code"], result_item["url_file"] = to_router(action, user_tacacs, pass_tacacs, router_pe, subinterface_pe, vrf_new, vrf_old, cliente, asnumber, pass_cipher, commit)
+                    result_item["detail"], result_item["status_code"], result_item["url_file"] = update_vrf.to_router(action, user_tacacs, pass_tacacs, router_pe, subinterface_pe, vrf_new, vrf_old, cliente, asnumber, pass_cipher, commit)
                     result.append(result_item)
                 return Response(result, status=status.HTTP_200_OK)
             else:
@@ -137,3 +138,39 @@ class ChangeVrfFromExcelView(viewsets.ViewSet):
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
        
+
+class SuspensionAndReconnectionView(viewsets.ViewSet):
+    """
+    DOCSTRING 
+    """
+    serializer_class = SuspensionAndReconnectionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def list(self, request):
+
+        return Response({"msg": "BIENVENIDO A SUSPENSION & RECONNECTION"})
+
+    def create(self, request):
+        # to_router(action, user_tacacs, pass_tacacs, pe, sub_interface, suspension, commit)
+        serializer = SuspensionAndReconnectionSerializer(data=request.data)
+        if serializer.is_valid():
+            user_tacacs = serializer.validated_data["user_tacacs"]
+            pass_tacacs = serializer.validated_data["pass_tacacs"]
+            commit = serializer.validated_data["commit"]
+            suspender_reconectar = serializer.validated_data["suspender_reconectar"]
+            router_pe = serializer.validated_data["router_pe"]
+            subinterface_pe = serializer.validated_data["subinterace_pe"]
+            
+            if suspender_reconectar == "SUSPENDER":
+                action = "suspension"
+                suspension = True
+            else:
+                action = "reconection"
+                suspension = False
+            
+            suspension_reconnection.to_router(action, user_tacacs, pass_tacacs, router_pe, subinterface_pe, suspension, commit)
+            return Response({"msg": "XD"})
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        

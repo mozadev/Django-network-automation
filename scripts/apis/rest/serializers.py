@@ -32,3 +32,12 @@ class ChangeVrfFromExcelSerializer(serializers.Serializer):
     pass_tacacs = serializers.CharField(style={'input_type': 'password'}, label="Password TACACS")
     commit = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear loas cambios?")
     excel = serializers.FileField(allow_empty_file=False)
+
+
+class SuspensionAndReconnectionSerializer(serializers.Serializer):
+    user_tacacs = serializers.CharField(required=True, label="Usuario TACACS")
+    pass_tacacs = serializers.CharField(style={'input_type': 'password'}, label="Password TACACS")
+    suspender_reconectar = serializers.ChoiceField(required=True, choices=["SUSPENDER", "RECONECTAR"], allow_blank=False, html_cutoff=2, initial="SUSPENDER", style={"base_template": "select.html"}, label="SUSPENDER / RECONECTAR", html_cutoff_text=None)
+    router_pe = serializers.CharField(required=True, label="Equipo PE")
+    subinterace_pe = serializers.CharField(required=True, label="Subinterface del PE")
+    commit = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear loas cambios?")

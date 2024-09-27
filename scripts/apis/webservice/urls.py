@@ -34,6 +34,7 @@ router = routers.DefaultRouter()
 #router.register(r'groups', views.GroupViewSet)
 router.register(r'change-vrf', views.ChangeVRFView, basename="change-vrf")
 router.register(r'change-vrf-from-excel', views.ChangeVrfFromExcelView, basename="change-vrf-from-excel")
+router.register(r'suspension-and-reconnection', views.SuspensionAndReconnectionView, basename="suspension-and-reconnection")
 
 # Wire up our API using automatic URL routing.
 # Additionally, we include login URLs for the browsable API.

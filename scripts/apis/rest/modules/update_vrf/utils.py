@@ -78,8 +78,6 @@ def to_router(action, user_tacacs, pass_tacacs, pe, sub_interface, vrf_new, vrf_
 
 
         for command in commands_to_huawei(sub_interface, vrf_new, vrf_old, ip_interface, ip_vrf, cid_found, cliente, asnumber, password, new_grupo, commit):
-            #print(command["command"])
-            #continue
             child.expect(command["prompt"])
             child.send(command["command"])
             time.sleep(TIME_SLEEP)

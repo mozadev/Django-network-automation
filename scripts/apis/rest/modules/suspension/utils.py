@@ -67,4 +67,4 @@ def to_router(action, user_tacacs, pass_tacacs, pe, sub_interface, suspension, c
         child.close()
         return f"EXITOSO: ", 200, url_file
     except pexpect.TIMEOUT:
-        return f"ERROR: el Servidor/Router no responden ó las tacas están mal", 200, url_file
+        return f"ERROR: el Servidor/Router no responden ó las tacas están mal", 400, url_file

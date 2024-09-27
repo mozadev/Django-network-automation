@@ -1,7 +1,7 @@
 import pexpect
 import os
 import time
-from rest.modules.update_vrf.commands import commands_to_huawei, commands_to_huawei_read
+from rest.modules.update_vrf.commands import commands_to_huawei
 import re
 import pandas as pd
 
@@ -50,7 +50,7 @@ def to_router(action, user_tacacs, pass_tacacs, pe, sub_interface, vrf_new, vrf_
         time.sleep(TIME_SLEEP)
 
         # PARAMETROS ENCONTRADOS SI O SI: IP - VRF
-        ip_found, vrf_found, cid_found, group_found, asnumber_found = search_parameters(child, sub_interface, vrf_new, cliente)
+        ip_found, vrf_found, cid_found, group_found, asnumber_found = search_parameters(child, sub_interface, vrf_new, vrf_old, cliente)
         if ip_found:
             # IP para VRF: aumentar una unidad en el último octeto
             ip_interface = ip_found
@@ -78,6 +78,8 @@ def to_router(action, user_tacacs, pass_tacacs, pe, sub_interface, vrf_new, vrf_
 
 
         for command in commands_to_huawei(sub_interface, vrf_new, vrf_old, ip_interface, ip_vrf, cid_found, cliente, asnumber, password, new_grupo, commit):
+            #print(command["command"])
+            continue
             child.expect(command["prompt"])
             child.send(command["command"])
             time.sleep(TIME_SLEEP)
@@ -99,45 +101,89 @@ def to_router(action, user_tacacs, pass_tacacs, pe, sub_interface, vrf_new, vrf_
 
 
 
-def search_parameters(child, sub_interface, vrf_new, cliente):
+def search_parameters(child, sub_interface, vrf_new, vrf_old, cliente):
+    vrf_new_str = convert_num_to_str(vrf_new, 5)
+    vrf_old_str = convert_num_to_str(vrf_old, 5)
     ip_found = None
     vrf_found = None
     cid_found = None
     group_found = None 
     asnumber_found = None
+    group_old_found = None
+    asnumber_old_found = None
+    ip_vrf_old_found = None
+    
+    child.expect(r"\<.*\>")
+    
+    # VER LA INTERFACE 
+    child.send(f"dis curr int {sub_interface}")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"\<.*\>")
+    output_interface = child.before.decode("utf-8")
+    ip_pattern = re.search(r'ip address (\d+\.\d+\.\d+\.\d+)', output_interface)
+    vrf_pattern = re.search(r'ip binding vpn-instance (\d+)', output_interface)
+    cid_pattern = re.search(r'CID (\d+)', output_interface)
+    if ip_pattern:
+        ip_found = ip_pattern.group(1)
+    if vrf_pattern:
+        vrf_found = int(vrf_pattern.group(1))
+    if cid_pattern:
+        cid_found = int(cid_pattern.group(1))
 
-    for command in commands_to_huawei_read(sub_interface, vrf_new):
-        output = child.before
-        output_str = output.decode('utf-8')
-        ip_pattern = re.search(r'ip address (\d+\.\d+\.\d+\.\d+)', output_str)
-        vrf_pattern = re.search(r'ip binding vpn-instance (\d+)', output_str)
-        cid_pattern = re.search(r'CID (\d+)', output_str)
-        group_pattern = re.search(rf'group RPVFM_{cliente} external', output_str)
-        asnumber_pattern = re.search(rf'peer RPVFM_{cliente} as-number (\d+)', output_str)
+    # ACTUAL VPN-INSTANCE EN LA BGP 12252: RECICLAR SUS VALORES
+    child.send(f"dis curr conf bgp | begin {vrf_old_str} | no-more")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"\<.*\>")
+    output_bgp_old = child.before.decode("utf-8")
+    output_bgp_old_list = re.split("\r\n", output_bgp_old)
+    output_bgp_old_result = output_bgp_old_list[:(output_bgp_old_list.index(" #") + 1)]
+    for item in output_bgp_old_result:
+        group_old_pattern = re.search(rf'group (.*) external', item)
+        if group_old_pattern:
+            group_old_found = group_old_pattern.group(1)
+            break
+    for item in output_bgp_old_result:
+        asnumber_old_pattern = re.search(rf'peer {group_old_found} as-number (\d+)', item)
+        if asnumber_old_pattern:
+            asnumber_old_found = int(asnumber_old_pattern.group(1))
+            break
 
-        if ip_pattern:
-            ip_found = ip_pattern.group(1)
-        if vrf_pattern:
-            vrf_found = int(vrf_pattern.group(1))
-        if cid_pattern:
-            cid_found = int(cid_pattern.group(1))
+    for item in output_bgp_old_result:
+        ip_vrf_old_pattern = re.search(rf'peer (\d+\.\d+\.\d+\.\d+) group {group_old_found}', item)
+        if ip_vrf_old_pattern:
+            ip_vrf_old_found = ip_vrf_old_pattern.group(1)
+            break
+    
+    print(group_old_found, asnumber_old_found, ip_vrf_old_found)
+    # NUEVA VPN-INSTANCE EN LA BGP 12252: VER SI YA ESTÁ CREADA
+    child.send(f"dis curr conf bgp | begin {vrf_new_str} | no-more")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"\<.*\>")
+    output_bgp = child.before.decode("utf-8")
+    output_bgp_new = child.before.decode("utf-8")
+    output_bgp_new_list = re.split("\r\n", output_bgp_new)
+    output_bgp_new_result = output_bgp_new_list[:(output_bgp_new_list.index(" #") + 1)]
+    for item in output_bgp_new_result:
+        group_pattern = re.search(rf'group RPVFM_{cliente} external', item)
         if group_pattern:
             group_found = f"RPVFM_{cliente}"
+            break
+    for item in output_bgp_new_result:
+        asnumber_pattern = re.search(rf'peer RPVFM_{cliente} as-number (\d+)', item)
         if asnumber_pattern:
             asnumber_found = int(asnumber_pattern.group(1))
+            break
 
-        tipo_prompt = child.expect([command["prompt"], "---- More ----"])
-        if tipo_prompt == 0:
-            child.send(command["command"])
-        elif tipo_prompt == 1:
-            child.send(" ")
-            time.sleep(TIME_SLEEP)
-            child.send("q")
-            child.expect(command["prompt"])
-            child.sendline("")
 
-        time.sleep(TIME_SLEEP)
-        child.sendline("")
+    # VER LAS ROUTE-STATIC
+    child.send(f"dis curr configuration route-static | no-more")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"\<.*\>")
+    #print(child.before)
 
     return ip_found, vrf_found, cid_found, group_found, asnumber_found
 
@@ -167,3 +213,13 @@ def clean_excel_changevrf(data):
         return df_columns.to_dict(orient='records'), 200
     except ValueError as e:
         return f"ERROR de Tipo, por favor ingresar tipos validos en {e}", 404
+
+
+def convert_num_to_str(number, digit):
+    num = str(number)
+    len_num = len(num)
+    if len_num < digit:
+        new_txt = str(number + 10**(digit))[1:]
+    else:
+        new_txt = num
+    return new_txt

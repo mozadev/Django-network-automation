@@ -1,23 +1,4 @@
 
-def commands_to_huawei_read(sub_interface, vrf_new):
-    vrf_new_str = convert_num_to_str(vrf_new, 5)
-
-    result = [
-        # validación inicial
-        #{"prompt": "\>", "command": f"dis curr int {sub_interface}"},
-        #{"prompt": "\>", "command": f"display ip routing-table vpn-instance 01090 10.233.26.88"},
-        #{"prompt": "\>", "command": f"dis curr conf vpn-instance 01090"},
-        #{"prompt": "\>", "command": f"dis bgp vpnv4 vpn-instance 01090 peer"},
-        #{"prompt": "\>", "command": f"dis curr conf bgp | begin 01090 | no-more"},
-        # INTERFACE
-        {"prompt": "\>", "command": f"dis curr int {sub_interface}"},
-        {"prompt": "\>", "command": f"dis curr conf bgp | begin {vrf_new_str}"},
-        {"prompt": "\>", "command": f""},
-        {"prompt": "\>", "command": f""},
-    ]
-
-    return result
-
 
 def commands_to_huawei(sub_interface, vrf_new, vrf_old, ip_interface, ip_vrf, cid_cliente, cliente, asnumber, password, new_grupo, commit):
     vrf_new_str = convert_num_to_str(vrf_new, 5)

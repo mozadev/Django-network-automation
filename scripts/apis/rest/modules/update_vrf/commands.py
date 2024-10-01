@@ -1,6 +1,6 @@
 
 
-def commands_to_huawei(sub_interface, vrf_new, vrf_old, ip_interface, ip_vrf, cid_cliente, cliente, asnumber, password, new_grupo, commit):
+def commands_to_huawei(sub_interface, vrf_new, vrf_old, ip_interface, ip_vrf, cid_cliente, cliente, asnumber, password, new_grupo, commit, ip_mra_found, mascara_mra_found):
     vrf_new_str = convert_num_to_str(vrf_new, 5)
     vrf_old_str = convert_num_to_str(vrf_old, 5)
 
@@ -9,7 +9,7 @@ def commands_to_huawei(sub_interface, vrf_new, vrf_old, ip_interface, ip_vrf, ci
         {"prompt": "\>", "command": f"system-view"},
         # NUEVA VRF 
         {"prompt": "\]", "command": f"ip vpn-instance {vrf_new_str}"},
-        {"prompt": "\]", "command": f" description RPVFM_{cliente}"},
+        {"prompt": "\]", "command": f" description {cliente}"},
         {"prompt": "\]", "command": f"  ipv4-family"},
         {"prompt": "\]", "command": f"  route-distinguisher 12252:{vrf_new}"},
         {"prompt": "\]", "command": f"  export route-policy loopback_Serv_Extranet_MRA_CLARO"},
@@ -38,17 +38,17 @@ def commands_to_huawei(sub_interface, vrf_new, vrf_old, ip_interface, ip_vrf, ci
         {"prompt": "\]", "command": f"  preference 20 200 200"},
         {"prompt": "\]", "command": f"  import-route direct"},  
         {"prompt": "\]", "command": f"  import-route static"},  
-        {"prompt": "\]", "command": f"  group RPVFM_{cliente} external"},  
-        {"prompt": "\]", "command": f"  peer RPVFM_{cliente} as-number {asnumber}"},  
-        {"prompt": "\]", "command": f"  peer RPVFM_{cliente} timer keepalive 10 hold 30"},  
-        {"prompt": "\]", "command": f"  peer RPVFM_{cliente} password cipher {password}"},  
-        {"prompt": "\]", "command": f"  peer RPVFM_{cliente} substitute-as"},  
-        {"prompt": "\]", "command": f"  peer RPVFM_{cliente} route-policy default_policy_pass_all import"},  
-        {"prompt": "\]", "command": f"  peer RPVFM_{cliente} route-policy default_policy_pass_all export"},
-        {"prompt": "\]", "command": f"  peer RPVFM_{cliente} advertise-community"},
-        {"prompt": "\]", "command": f"  peer RPVFM_{cliente} keep-all-routes"},
-        {"prompt": "\]", "command": f"  peer {ip_vrf} group RPVFM_{cliente}"},
-        {"prompt": "\]", "command": f"  peer {ip_vrf} description CID {cid_cliente} RPVFM {cliente}"},
+        {"prompt": "\]", "command": f"  group {cliente} external"},  
+        {"prompt": "\]", "command": f"  peer {cliente} as-number {asnumber}"},  
+        {"prompt": "\]", "command": f"  peer {cliente} timer keepalive 10 hold 30"},  
+        {"prompt": "\]", "command": f"  peer {cliente} password cipher {password}"},  
+        {"prompt": "\]", "command": f"  peer {cliente} substitute-as"},  
+        {"prompt": "\]", "command": f"  peer {cliente} route-policy default_policy_pass_all import"},  
+        {"prompt": "\]", "command": f"  peer {cliente} route-policy default_policy_pass_all export"},
+        {"prompt": "\]", "command": f"  peer {cliente} advertise-community"},
+        {"prompt": "\]", "command": f"  peer {cliente} keep-all-routes"},
+        {"prompt": "\]", "command": f"  peer {ip_vrf} group {cliente}"},
+        {"prompt": "\]", "command": f"  peer {ip_vrf} description CID {cid_cliente} {cliente}"},
         {"prompt": "\]", "command": f"  peer {ip_vrf} as-number {asnumber}"},
         {"prompt": "\]", "command": f"  quit"},
         {"prompt": "\]", "command": f" quit"},
@@ -65,8 +65,8 @@ def commands_to_huawei(sub_interface, vrf_new, vrf_old, ip_interface, ip_vrf, ci
         # CONFIGURAR NUEVO PEER AL GROUP DE LA VPN-INSTANCE
         {"prompt": "\]", "command": f"bgp 12252"},
         {"prompt": "\]", "command": f" ipv4-family vpn-instance {vrf_new_str}"},
-        {"prompt": "\]", "command": f"  peer {ip_vrf} group RPVFM_{cliente}"},
-        {"prompt": "\]", "command": f"  peer {ip_vrf} description CID {cid_cliente} RPVFM {cliente}"},
+        {"prompt": "\]", "command": f"  peer {ip_vrf} group {cliente}"},
+        {"prompt": "\]", "command": f"  peer {ip_vrf} description CID {cid_cliente} {cliente}"},
         {"prompt": "\]", "command": f"  peer {ip_vrf} as-number {asnumber}"},
         {"prompt": "\]", "command": f"  quit"},
         {"prompt": "\]", "command": f" quit"},
@@ -77,6 +77,11 @@ def commands_to_huawei(sub_interface, vrf_new, vrf_old, ip_interface, ip_vrf, ci
         {"prompt": "N\]:", "command": commit},
         {"prompt": "\]", "command": f"  quit"},
         {"prompt": "\]", "command": f" quit"},
+    ]
+
+    staticroute = [
+        {"prompt": "\]", "command": f"ip route-static vpn-instance {vrf_new_str} {ip_mra_found} {mascara_mra_found} {ip_vrf} preference 1"},
+        {"prompt": "\]", "command": f"undo ip route-static vpn-instance {vrf_old_str} {ip_mra_found} {mascara_mra_found}"},
     ]
 
     commitear = [
@@ -93,6 +98,7 @@ def commands_to_huawei(sub_interface, vrf_new, vrf_old, ip_interface, ip_vrf, ci
     else:
         result.extend(bgp_group_found)
 
+    result.extend(staticroute)
     result.extend(commitear)
 
     return result

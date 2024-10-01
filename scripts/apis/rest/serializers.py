@@ -22,7 +22,6 @@ class ChangeVRFSerializer(serializers.Serializer):
     vrf_old = serializers.IntegerField(required=True, min_value=0, label="VRF actual", help_text="Ingresar la actual VRF que está en la subinterface")
     vrf_new = serializers.IntegerField(required=True, min_value=0, label="VRF NUEVA", help_text="Ingresar la nueva VRF que se creará")
     cliente = serializers.CharField(required=True, label="Cliente", help_text="Ingresar tal cual el grupo de la VRF, se buscará la vrf: RPVFM_cliente") 
-    asnumber = serializers.IntegerField(required=True, min_value=0, label="ASNUMBER PEER", help_text="Este ASNUMBER se buscará en el grupo de la VRF para validar si existe")
     pass_cipher = serializers.CharField(required=True, label="Cipher Password")
     commit = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear loas cambios?")
 

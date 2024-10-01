@@ -65,7 +65,6 @@ class ChangeVRFView(viewsets.ViewSet):
             vrf_old = serializer.validated_data["vrf_old"]
             vrf_new = serializer.validated_data["vrf_new"]
             cliente = serializer.validated_data["cliente"]
-            asnumber = serializer.validated_data["asnumber"]
             pass_cipher = serializer.validated_data["pass_cipher"]
             commit = serializer.validated_data["commit"]
 
@@ -74,7 +73,7 @@ class ChangeVRFView(viewsets.ViewSet):
             msg = {}
             serializer.validated_data["pass_tacacs"] = "*************"
             msg["data_ingresada"] = serializer.validated_data
-            detail, status_code, url_file = update_vrf.to_router(action, user_tacacs, pass_tacacs, router_pe, subinterface_pe, vrf_new, vrf_old, cliente, asnumber, pass_cipher, commit)
+            detail, status_code, url_file = update_vrf.to_router(action, user_tacacs, pass_tacacs, router_pe, subinterface_pe, vrf_new, vrf_old, cliente, pass_cipher, commit)
             msg["detail"] = detail
             msg["url_file"] = url_file
 
@@ -128,9 +127,8 @@ class ChangeVrfFromExcelView(viewsets.ViewSet):
                     vrf_old = item["vrf_old"]
                     vrf_new = item["vrf_new"]
                     cliente = item["cliente"]
-                    asnumber = item["asnumber"]
                     pass_cipher = item["pass_cipher"]
-                    result_item["detail"], result_item["status_code"], result_item["url_file"] = update_vrf.to_router(action, user_tacacs, pass_tacacs, router_pe, subinterface_pe, vrf_new, vrf_old, cliente, asnumber, pass_cipher, commit)
+                    result_item["detail"], result_item["status_code"], result_item["url_file"] = update_vrf.to_router(action, user_tacacs, pass_tacacs, router_pe, subinterface_pe, vrf_new, vrf_old, cliente, pass_cipher, commit)
                     result.append(result_item)
                 return Response(result, status=status.HTTP_200_OK)
             else:

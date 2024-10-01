@@ -2,8 +2,11 @@ import pexpect
 import os
 import time
 from rest.modules.suspension.commands import commands_to_huawei
+from dotenv import load_dotenv
+
 
 def to_router(action, user_tacacs, pass_tacacs, pe, sub_interface, suspension, commit):
+    load_dotenv()
     action = "suspension" if suspension else "reconnection"
     TACASTS_USER = user_tacacs
     TACASTS_PASS = pass_tacacs
@@ -15,7 +18,7 @@ def to_router(action, user_tacacs, pass_tacacs, pe, sub_interface, suspension, c
     TIME_SLEEP = 0.1
     interface_log = sub_interface.replace("/", "_")
     name_file= f"media/{action}_{pe}_{interface_log}.txt"
-    url_file = f"http://10.200.90.113:9000/{name_file}"
+    url_file = f"http://10.200.90.248:9000/{name_file}"
 
     try:
         # Ingreso al Cyberark

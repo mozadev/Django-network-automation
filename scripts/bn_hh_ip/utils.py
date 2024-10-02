@@ -3,14 +3,12 @@ import os
 import time
 
 def to_router(cid):
-    TACASTS_USER = os.getenv("TACASTS_USER")
-    TACASTS_PASS = os.getenv("TACASTS_PASS")
     CYBERARK_USER = os.getenv("CYBERARK_USER")
     CYBERARK_PASS = os.getenv("CYBERARK_PASS")
     CYBERARK_IP = os.getenv("CYBERARK_IP")
     CRT_IP = os.getenv("CRT_IP")
     CRT_USER = os.getenv("CRT_USER")
-    TIME_SLEEP = 1.5
+    TIME_SLEEP = 0.5
 
 
     try:
@@ -26,7 +24,7 @@ def to_router(cid):
         # Obteniendo el IP
         child.expect("\$")
         time.sleep(TIME_SLEEP)
-        child.send(f"hh {cid} | tail -1 | awk \'{{print $1}}\'")
+        child.send(f"hh {cid} | grep -v '^#' | awk \'{{print $1}}\'")
         time.sleep(TIME_SLEEP)
         child.sendline("")
         time.sleep(TIME_SLEEP)

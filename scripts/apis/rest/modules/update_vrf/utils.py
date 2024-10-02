@@ -59,22 +59,24 @@ def to_router(action, user_tacacs, pass_tacacs, pe, sub_interface, vrf_new, vrf_
             ip_vrf = red_wan_ip(ip_found, 1)
             if vrf_found == vrf_old:
                 if cid_found:
-                    if group_found:
-                        new_grupo = False
-                        if asnumber_found:
-                            if ip_mra_found and mascara_mra_found:
-                                pass
-                            else:
-                                child.close()
-                                ip_vrf_found = red_wan_ip(ip_found, 1)
-                                return f"ERROR: No se encontró la ip y máscara del MRA en el enrutamiento static para la VRF ACTUAL {vrf_old} y ip {ip_vrf_found}"
-                        else:
-                            child.close()
-                            return f"ERROR: AS-NUMBER NO ENCONTRADO EN EL GRUPO {group_found} DE LA VPN-INSTANCE {vrf_new} YA ENCONTRADA", 400, url_file
-                    else:
-                        new_grupo = True
+                    pass
                 else:
                     cid_found = ""
+
+                if group_found:
+                    new_grupo = False
+                    if asnumber_found:
+                        if ip_mra_found and mascara_mra_found:
+                            pass
+                        else:
+                            child.close()
+                            ip_vrf_found = red_wan_ip(ip_found, 1)
+                            return f"ERROR: No se encontró la ip y máscara del MRA en el enrutamiento static para la VRF ACTUAL {vrf_old} y ip {ip_vrf_found}"
+                    else:
+                        child.close()
+                        return f"ERROR: AS-NUMBER NO ENCONTRADO EN EL GRUPO {group_found} DE LA VPN-INSTANCE {vrf_new} YA ENCONTRADA", 400, url_file
+                else:
+                    new_grupo = True
             else:
                 child.close()
                 return f"ERROR: VRF ingresada anterior {vrf_old} no encontrada o no coincide con la VRF en la interface {sub_interface} del equipo {pe}", 400, url_file
@@ -83,14 +85,16 @@ def to_router(action, user_tacacs, pass_tacacs, pe, sub_interface, vrf_new, vrf_
             return f"ERROR: IPv4 en la interface {sub_interface} del equipo {pe} no encontrada", 400, url_file
 
 
-
+        child.send(f" ")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
         for command in commands_to_huawei(sub_interface, vrf_new, vrf_old, ip_interface, ip_vrf, cid_found, cliente, asnumber_found, password, new_grupo, commit, ip_mra_found, mascara_mra_found):
-            print(command["command"])
-            continue
-            #child.expect(command["prompt"])
-            #child.send(command["command"])
-            #time.sleep(TIME_SLEEP)
-            #child.sendline("")
+            #print(command["command"])
+            #continue
+            child.expect(command["prompt"])
+            child.send(command["command"])
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
                 
         child.send("quit")
         time.sleep(TIME_SLEEP)
@@ -128,7 +132,7 @@ def search_parameters(child, sub_interface, vrf_new, vrf_old, cliente):
     child.sendline("")
     child.expect(r"\<.*\>")
     output_sysname = child.before.decode("utf-8")
-    sysname_pattern = re.search(r'sysname (\w+)', output_sysname)
+    sysname_pattern = re.search(r'sysname (\S+)', output_sysname)
     if sysname_pattern:
         sysname_found = sysname_pattern.group(1)
 
@@ -155,7 +159,12 @@ def search_parameters(child, sub_interface, vrf_new, vrf_old, cliente):
     child.expect(rf'\<{sysname_found}\>')
     output_bgp_old = child.before.decode("utf-8")
     output_bgp_old_list = re.split("\r\n", output_bgp_old)
-    output_bgp_old_result = output_bgp_old_list[:(output_bgp_old_list.index(" #") + 1)]
+
+    try: 
+        output_bgp_old_result = output_bgp_old_list[:(output_bgp_old_list.index(" #") + 1)]
+    except ValueError:
+        output_bgp_old_result = []
+
 
     ip_vrf_old = red_wan_ip(ip_found, 1)
 

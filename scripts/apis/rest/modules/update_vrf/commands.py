@@ -6,7 +6,7 @@ def commands_to_huawei(sub_interface, vrf_new, vrf_old, ip_interface, ip_vrf, ci
 
     result = [
         # Configuración
-        {"prompt": "\>", "command": f"system-view"},
+        {"prompt": r"\<.*?\>", "command": f"system-view"},
         # NUEVA VRF 
         {"prompt": "\]", "command": f"ip vpn-instance {vrf_new_str}"},
         {"prompt": "\]", "command": f" description {cliente}"},

@@ -1,11 +1,12 @@
 from django.contrib.auth.models import Group, User
 from rest_framework import permissions, viewsets
-from rest_framework.views import APIView
 from rest.serializers import GroupSerializer, UserSerializer, ChangeVRFSerializer, ChangeVrfFromExcelSerializer, SuspensionAndReconnectionSerializer
+from rest.serializers import AnexosUploadCsvSerializer
 from rest_framework.response import Response
 from rest_framework import status
 import rest.modules.update_vrf.utils as update_vrf
 import rest.modules.suspension.utils as suspension_reconnection
+import rest.modules.upload_anexos.utils as upload_anexos
 # from rest.modules.update_vrf.util.commands
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -180,4 +181,32 @@ class SuspensionAndReconnectionView(viewsets.ViewSet):
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+        
+class AnexosUploadCsvViewSet(viewsets.ViewSet):
+    """
+    DOCSTRING
+    """
+    serializer_class = AnexosUploadCsvSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def list(self, request):
+
+        return Response({"msg": "BIENVENIDO A ANEXOS UPLOAD"})
+    
+    def create(self, request):
+        serializer = AnexosUploadCsvSerializer(data=request.data)
+        if serializer.is_valid():
+            upload_excel = serializer.validated_data["upload_excel"]
+            upload_fecha = serializer.validated_data["upload_fecha"]
+            
+            data, status_upload =  upload_anexos.clean_data(upload_excel, upload_fecha)
+            if status_upload == 200:
+                #print(data)
+                pass
+            else:
+                return Response({"msg": data}, status=status.HTTP_400_BAD_REQUEST)
+
+            return Response({"msg": "XD"})
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         

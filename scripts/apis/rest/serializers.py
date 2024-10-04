@@ -1,5 +1,7 @@
 from django.contrib.auth.models import Group, User
 from rest_framework import serializers
+from datetime import datetime
+from .models import AnexosRegistros, AnexosUpload
 
 
 class UserSerializer(serializers.HyperlinkedModelSerializer):
@@ -40,3 +42,20 @@ class SuspensionAndReconnectionSerializer(serializers.Serializer):
     router_pe = serializers.CharField(required=True, label="Equipo PE")
     subinterace_pe = serializers.CharField(required=True, label="Subinterface del PE")
     commit = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear loas cambios?")
+
+
+class AnexosUploadCsvSerializer(serializers.Serializer):
+    upload_excel = serializers.FileField(allow_empty_file=False, label="UPLOAD ANEXO")
+    upload_fecha = serializers.DateTimeField(initial=datetime.now(), label="FECHA DE UPLOAD")
+
+
+class AnexosUploadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AnexosUpload
+        fields = "__all__"
+
+
+class AnexosRegistrosSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AnexosRegistros
+        fields = "__all__"

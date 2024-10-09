@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ul class="list-group">
+  {% for item in data %}
+  <li class="list-group-item">
+      <span class="text-info">Key: </span> <span>{{ item.key.key }}</span>
+      <br>
+      <span class="text-info">Registro: </span><span>{{ item.registro }}</span>
+      <br>
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}

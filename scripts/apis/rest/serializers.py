@@ -55,6 +55,7 @@ class AnexosUploadSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+
 class AnexosRegistrosSerializer(serializers.ModelSerializer):
     class Meta:
         model = AnexosRegistros

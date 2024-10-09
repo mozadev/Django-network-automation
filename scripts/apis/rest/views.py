@@ -1,12 +1,14 @@
 from django.contrib.auth.models import Group, User
 from rest_framework import permissions, viewsets
 from rest.serializers import GroupSerializer, UserSerializer, ChangeVRFSerializer, ChangeVrfFromExcelSerializer, SuspensionAndReconnectionSerializer
-from rest.serializers import AnexosUploadCsvSerializer
+from rest.serializers import AnexosUploadCsvSerializer, AnexosUploadSerializer, AnexosRegistrosSerializer
+from .models import AnexosRegistros, AnexosUpload
 from rest_framework.response import Response
 from rest_framework import status
 import rest.modules.update_vrf.utils as update_vrf
 import rest.modules.suspension.utils as suspension_reconnection
 import rest.modules.upload_anexos.utils as upload_anexos
+from rest_framework.renderers import TemplateHTMLRenderer
 # from rest.modules.update_vrf.util.commands
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -201,12 +203,37 @@ class AnexosUploadCsvViewSet(viewsets.ViewSet):
             
             data, status_upload =  upload_anexos.clean_data(upload_excel, upload_fecha)
             if status_upload == 200:
-                #print(data)
-                pass
-            else:
-                return Response({"msg": data}, status=status.HTTP_400_BAD_REQUEST)
+                new_register = []
+                for item in data:
+                    i = {}
+                    anexo, creado = AnexosUpload.objects.get_or_create(
+                        key=item["key"],
+                        anexo=item["anexo"],
+                    )
+                    if creado:
+                        i["key"] = item["key"]
+                        i["anexo"] = item["anexo"]
+                        new_register.append(i)
 
-            return Response({"msg": "XD"})
+                    registro = AnexosRegistros.objects.create(key=anexo, status=item["status"], registro=item["registro"])
+
+ 
+
+                return Response({"msg": "DATOS SUBIDOS", "nuevos": new_register}, status=status.HTTP_200_OK)
+            else:
+                return Response({"msg": "ERROR"}, status=status.HTTP_400_BAD_REQUEST)
+
+            
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
+
+class AnexosUploadDashboard(viewsets.ViewSet):
+    """
+    DOCSTRING
+    """
+    renderer_classes = [TemplateHTMLRenderer]
+    template_name="anexos_dashboard.html"
+    def list(self, request):
+        queryset = AnexosRegistros.objects.filter(status=False)
+        return Response({"data": queryset})

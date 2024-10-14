@@ -63,20 +63,18 @@ def to_router(action, user_tacacs, pass_tacacs, pe, sub_interface, vrf_new, vrf_
                 else:
                     cid_found = ""
 
-                if group_found:
-                    new_grupo = False
-                    if asnumber_found:
-                        if ip_mra_found and mascara_mra_found:
-                            pass
-                        else:
-                            child.close()
-                            ip_vrf_found = red_wan_ip(ip_found, 1)
-                            return f"ERROR: No se encontró la ip y máscara del MRA en el enrutamiento static para la VRF ACTUAL {vrf_old} y ip {ip_vrf_found}"
+                if asnumber_found:
+                    if ip_mra_found and mascara_mra_found:
+                        msg_mra = None
                     else:
-                        child.close()
-                        return f"ERROR: AS-NUMBER NO ENCONTRADO EN EL GRUPO {group_found} DE LA VPN-INSTANCE {vrf_new} YA ENCONTRADA", 400, url_file
+                        ip_vrf_found = red_wan_ip(ip_found, 1)
+                        msg_mra = f"INCOMPLETO: No se encontró la route static PREFERENCE 1 para VRF {vrf_old} e WAN {ip_vrf_found}"
+                        #child.close()
+                        #
+                        #eturn f"ERROR: No se encontró la ip y máscara del MRA en el enrutamiento static para la VRF ACTUAL {vrf_old} y ip {ip_vrf_found}", 400, url_file
                 else:
-                    new_grupo = True
+                    child.close()
+                    return f"ERROR: AS-NUMBER NO ENCONTRADO EN EL GRUPO {group_found} DE LA VPN-INSTANCE {vrf_new} YA ENCONTRADA", 400, url_file
             else:
                 child.close()
                 return f"ERROR: VRF ingresada anterior {vrf_old} no encontrada o no coincide con la VRF en la interface {sub_interface} del equipo {pe}", 400, url_file
@@ -89,7 +87,7 @@ def to_router(action, user_tacacs, pass_tacacs, pe, sub_interface, vrf_new, vrf_
         time.sleep(TIME_SLEEP)
         child.sendline("")
         
-        for command in commands_to_huawei(sub_interface, vrf_new, vrf_old, ip_interface, ip_vrf, cid_found, cliente, asnumber_found, password, new_grupo, commit, ip_mra_found, mascara_mra_found):
+        for command in commands_to_huawei(sub_interface, vrf_new, vrf_old, ip_interface, ip_vrf, cid_found, cliente, asnumber_found, password, group_found, commit, ip_mra_found, mascara_mra_found):
             #print(command["command"])
             #continue
             prompt = child.expect([command["prompt"], "which will affect BGP peer relationship establishment\. Are you sure you want to continue\? \[Y\/N\]:"])
@@ -118,7 +116,11 @@ def to_router(action, user_tacacs, pass_tacacs, pe, sub_interface, vrf_new, vrf_
         time.sleep(TIME_SLEEP)
         child.sendline("")
         child.close()
-        return f"EXITOSO: NUEVA VRF {vrf_new} CREADA Y ASIGNADA EN {pe} {sub_interface}", 200, url_file
+
+        if msg_mra:
+            return f"PARCIAL EXITOSO (INCOMPLETO ROUTE STATIC): NUEVA VRF {vrf_new} CREADA Y ASIGNADA EN {pe} {sub_interface} - {msg_mra}", 200, url_file
+        else:
+            return f"EXITOSO: NUEVA VRF {vrf_new} CREADA Y ASIGNADA EN {pe} {sub_interface}", 200, url_file
     except pexpect.TIMEOUT as e:
         return f"ERROR: FALLÓ PARA {pe} {sub_interface}: NO SE CREÓ LA VRF {vrf_new}, el router no responde: {e}", 500, url_file
 
@@ -130,11 +132,12 @@ def search_parameters(child, sub_interface, vrf_new, vrf_old, cliente):
     ip_found = None
     vrf_found = None
     cid_found = None
-    group_found = None
+    group_found = 0
     asnumber_old_found = None
     sysname_found = None
     ip_mra_found = None
     mascara_mra_found = None
+    asnumber_found = None
     
     child.expect(r"\<.*\>")
 
@@ -200,12 +203,15 @@ def search_parameters(child, sub_interface, vrf_new, vrf_old, cliente):
     for item in output_bgp_new_result:
         group_pattern = re.search(rf'group {cliente} external', item)
         if group_pattern:
-            group_found = f"{cliente}"
-            break
-    for item in output_bgp_new_result:
-        asnumber_pattern = re.search(rf'peer {cliente} as-number {asnumber_old_found}', item)
-        if asnumber_pattern:
-            asnumber_found = int(asnumber_pattern.group(1))
+            for item_internal in output_bgp_new_result:
+                asnumber_pattern = re.search(rf'peer {cliente} as-number (\d+)', item_internal)
+                if asnumber_pattern:
+                    asnumber_found = int(asnumber_pattern.group(1))
+                    break
+            if asnumber_found == asnumber_old_found: 
+                group_found = 1
+            else: 
+                group_found = 2
             break
 
     # VER LAS ROUTE-STATIC

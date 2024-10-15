@@ -12,3 +12,4 @@ class AnexosRegistros(models.Model):
     key = models.ForeignKey("AnexosUpload", on_delete=models.CASCADE, null=False)
     status = models.BooleanField(null=False)
     registro = models.DateTimeField(null=False)
+    last = models.BooleanField(null=False, default=False)

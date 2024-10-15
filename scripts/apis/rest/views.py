@@ -9,6 +9,7 @@ import rest.modules.update_vrf.utils as update_vrf
 import rest.modules.suspension.utils as suspension_reconnection
 import rest.modules.upload_anexos.utils as upload_anexos
 from rest_framework.renderers import TemplateHTMLRenderer
+from rest_framework.reverse import reverse
 # from rest.modules.update_vrf.util.commands
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -191,9 +192,25 @@ class AnexosUploadCsvViewSet(viewsets.ViewSet):
     serializer_class = AnexosUploadCsvSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def list(self, request):
+    def retrieve(self, request, pk=None):
+        result = {}
+        queryset = AnexosRegistros.objects.filter(key__key=pk).order_by("-registro").values()
+        if queryset:
+            n = len(queryset)
+            fecha_final = queryset[0]["registro"]
+            fecha_inicial = queryset[n - 1]["registro"]
+            for i in queryset:
+                if i["status"] == True:
+                    fecha_inicial = i["registro"]
+                    break
+            duration = (fecha_final - fecha_inicial).total_seconds() / 3600
+            result["duration_hrs"] = "%.2f" % duration
+            result["data"] = queryset
+        return Response(result, status=status.HTTP_200_OK)
 
-        return Response({"msg": "BIENVENIDO A ANEXOS UPLOAD"})
+    def list(self, request):
+        dashboard = reverse("anexos-upload-dashboard-list", request=request)
+        return Response({"ver-dashboard": dashboard}, status=status.HTTP_200_OK)
     
     def create(self, request):
         serializer = AnexosUploadCsvSerializer(data=request.data)
@@ -204,6 +221,7 @@ class AnexosUploadCsvViewSet(viewsets.ViewSet):
             data, status_upload =  upload_anexos.clean_data(upload_excel, upload_fecha)
             if status_upload == 200:
                 new_register = []
+                AnexosRegistros.objects.filter(last=True).update(last=False)
                 for item in data:
                     i = {}
                     anexo, creado = AnexosUpload.objects.get_or_create(
@@ -215,15 +233,11 @@ class AnexosUploadCsvViewSet(viewsets.ViewSet):
                         i["anexo"] = item["anexo"]
                         new_register.append(i)
 
-                    registro = AnexosRegistros.objects.create(key=anexo, status=item["status"], registro=item["registro"])
-
- 
-
-                return Response({"msg": "DATOS SUBIDOS", "nuevos": new_register}, status=status.HTTP_200_OK)
+                    registro = AnexosRegistros.objects.create(key=anexo, status=item["status"], registro=item["registro"], last=True)
+                    dashboard = reverse("anexos-upload-dashboard-list", request=request)
+                return Response({"msg": "DATOS SUBIDOS EXITOSAMENTE", "ver-dashboard": dashboard, "nuevos": new_register}, status=status.HTTP_200_OK)
             else:
                 return Response({"msg": "ERROR"}, status=status.HTTP_400_BAD_REQUEST)
-
-            
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
@@ -232,8 +246,36 @@ class AnexosUploadDashboard(viewsets.ViewSet):
     """
     DOCSTRING
     """
+    permission_classes = [permissions.IsAuthenticated]
     renderer_classes = [TemplateHTMLRenderer]
     template_name="anexos_dashboard.html"
+    
+
     def list(self, request):
-        queryset = AnexosRegistros.objects.filter(status=False)
-        return Response({"data": queryset})
+        result={}
+        queryset = AnexosRegistros.objects.filter(last=True)
+        
+        result["count"] = queryset.count()
+        queryset = queryset.filter(status=False)
+        result["down"]  = queryset.count()
+        result["down_rate"] = "%.0f" % ((result["down"] / result["count"])  * 100) 
+        result["up"]  = result["count"] - result["down"]
+        result["up_rate"] = "%.0f" % (100 - float(result["down_rate"]))
+
+        queryset_values = queryset.values("key__key", "key__anexo", "registro", "status", "last")
+        for item in queryset_values:
+            item_queryset = AnexosRegistros.objects.filter(key__key=item["key__key"]).order_by("-registro").values()
+            if item_queryset:
+                n = len(item_queryset)
+                fecha_final = item_queryset[0]["registro"]
+                fecha_inicial = item_queryset[n - 1]["registro"]
+                for i in item_queryset:
+                    if i["status"] == True:
+                        fecha_inicial = i["registro"]
+                        break
+                duration = (fecha_final - fecha_inicial).total_seconds() / 3600
+
+            item["duration_hrs"] = "%.2f" % duration
+        
+        result["data"] = queryset_values
+        return Response({"data": result})

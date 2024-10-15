@@ -3,7 +3,6 @@ import json
 
 def clean_data(file, fecha):
     data = pd.read_csv(file, sep=",", usecols=["key", "login"])
-    print(data)
     if data.isnull().sum().sum() == 0:
         data_key = data["key"].str.split(pat="__", expand=True).rename(columns={0: "key", 1: "status"})
         data_login = data["login"].str.split(pat="@", expand=True).rename(columns={0: "anexo", 1: "dominio"})

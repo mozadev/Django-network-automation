@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     #'drf_material',
     'rest_framework',
+    'corsheaders',
     'rest'
 ]
 
@@ -147,3 +148,11 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'rest_framework.schemas.openapi.AutoSchema',
 
 }
+
+CORS_ORIGIN_ALLOW_ALL = True
+
+#CORS_ALLOWED_ORIGINS = [
+#    'http://localhost:4200',
+#    'http://localhost:80',
+#]
+CORS_ALLOW_CREDENTIALS = True

@@ -1,14 +1,173 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<ul class="list-group">
-  {% for item in data %}
-  <li class="list-group-item">
-      <span class="text-info">Key: </span> <span>{{ item.key.key }}</span>
-      <br>
-      <span class="text-info">Registro: </span><span>{{ item.registro }}</span>
-      <br>
-  </li>
-  {% endfor %}
-</ul>
+
+
+<nav class="navbar navbar-dark bg-primary">
+  <a class="navbar-brand" href="#">
+    <img src="https://ingeaudit.cl/wp-content/uploads/2014/12/1700px-Claro.svg-1024x1024.png" width="30" height="30" class="d-inline-block align-center" alt="">
+    <span class="navbar-text">API-MINPU</span>
+  </a>
+  <a class="navbar-brand" href="{% url 'anexos-upload-list' %}" target="_self">
+    <span class="navbar-text" data-toggle="tooltip" data-html="true" title="<strong>UPLOAD DATA</strong>"><span class="material-icons" style="color: white;">upload</span></span>
+  </a>
+</nav>
+
+<div class="container">
+  <div class="row">
+    <div class="col-2"></div>
+    <div class="col-8">
+      <div>
+        <p class="h1">ANEXOS - MINPU</p>
+      </div>
+      <div style="height: 300px; padding: 50px;">
+        <div class="row">
+          <div class="col-6">
+            <div class="card border-success mb-3" style="width: 300px; height: 150px;">
+              <div class="card-header text-success">Total de Anexos Subidos</div>
+              <div class="card-body text-success">
+                <p class="h1" style="text-align: center;"><span class="material-icons" style="color: blue;">arrow_right</span> {{ data.count }}</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="card text-white bg-warning mb-3" style="width: 300px; height: 150px;">
+              <div class="card-header">Resumen de Anexos</div>
+              <div class="card-body">
+                <p class="h4" style="text-align: left;"><span class="material-icons" style="color: green;">arrow_drop_up</span><strong>UP</strong>: {{ data.up }} -- {{ data.up_rate }}% </p>
+                <p class="h4" style="text-align: left;"><span class="material-icons" style="color: red;">arrow_drop_down</span><strong>DOWN</strong>: {{ data.down }} -- {{ data.down_rate }}%</p> 
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-2"></div>
+  </div>
+  <div class="row">
+    <div class="col-2"></div>
+    <div class="col-8">   
+      <div>
+        <table class="table table-hover table-sm" id="sortableTable">
+          <thead class="table-info">
+            <tr>
+              <th scope="col">Key</th>
+              <th scope="col">Anexo</th>
+              <th scope="col">Duración de Caída</th>
+              <th scope="col">Registro</th>
+              <th scope="col">Detalles</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in data.data %}
+            <tr>
+              <th scope="row">{{ item.key__key }}</th>
+              <td>{{ item.key__anexo }}</td>
+              <td>{{ item.duration_hrs }}</td>
+              <td>{{ item.registro }}</td>
+              <td>
+                <button type="button" class="btn btn-outline-info btn-sm ver-detalles" data-id="{{ item.key__key }}" data-toggle="tooltip" data-html="true" title="<em>Ver los detalles del anexo</em> <b>{{item.key__key}}</b>"><span class="material-icons">visibility</span></button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="col-2"></div>
+  </div>
+</div>
+
+
+<script>
+  $(document).ready(function(){
+    $(".ver-detalles").click(function(){
+      var itemId = $(this).data("id");
+      $('#detallesBody').empty();
+      $.ajax({
+        url: "/anexos-upload/" + itemId + "/",
+        method: "GET",
+        success: function(data){
+          $('#detallesModalLabel').html('<p style="color: gray;">Detalles del Anexo <strong style="color: black;">' + itemId + '</strong><br/> Horas caído: <strong style="color: black;">' + data.duration_hrs + '</strong></p>');
+          $.each(data.data, function(index, item){
+            var row = "<tr>" +
+              "<td>" + index + "</td>" +
+              "<td>" + formatDateTime(item.registro) + "</td>" +
+              "<td>" + getStatusIcon(item.status) + "</td>" +
+              "</tr>";
+            $("#detallesBody").append(row);
+          });
+          $('#detallesModal').modal('show');
+        },
+        error: function() {
+          alert('Error al obtener los detalles');
+        }
+      });
+    });
+  });
+
+  $(function () {
+    $('[data-toggle="tooltip"]').tooltip()
+  });
+
+  function getStatusIcon(status){
+    switch(status){
+      case true:
+        return '<span class="material-icons" style="color: green;">check</span>'
+      default:
+        return '<span class="material-icons" style="color: red;">close</span>'
+    }
+  }
+
+  function formatDateTime(dateTimeString) {
+  const date = new Date(dateTimeString);
+  return date.toLocaleString('es-ES', {  
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZoneName: 'short'
+  });
+}
+
+
+setInterval(function() {
+  location.reload();
+}, 300000);
+
+</script>
+
+<!-- Modal que mostrará los detalles -->
+<div class="modal fade" id="detallesModal" tabindex="-1" role="dialog" aria-labelledby="detallesModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+      <div class="modal-content">
+          <div class="modal-header">
+              <h5 class="modal-title" id="detallesModalLabel">Detalles</h5>
+              <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                  <span aria-hidden="true">&times;</span>
+              </button>
+          </div>
+          <div class="modal-body">
+            <table class="table table-hover table-sm" id="detallesTable">
+              <thead class="table-info">
+                <tr>
+                  <th>#</th>
+                  <th>Fecha de Registro</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="detallesBody">
+              </tbody>
+            </table>
+          </div>
+          <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+          </div>
+      </div>
+  </div>
+</div>
+
+
 {% endblock %}

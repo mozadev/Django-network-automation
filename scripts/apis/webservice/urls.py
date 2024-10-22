@@ -37,6 +37,7 @@ router.register(r'change-vrf-from-excel', views.ChangeVrfFromExcelView, basename
 router.register(r'suspension-and-reconnection', views.SuspensionAndReconnectionView, basename="suspension-and-reconnection")
 router.register(r'anexos-upload', views.AnexosUploadCsvViewSet, basename="anexos-upload")
 router.register(r'anexos-upload-dashboard', views.AnexosUploadDashboard, basename="anexos-upload-dashboard")
+router.register(r'anexos-upload-dashboard-v2', views.AnexosUploadDashboard2, basename="anexos-upload-dashboard-v2")
 
 # Wire up our API using automatic URL routing.
 # Additionally, we include login URLs for the browsable API.

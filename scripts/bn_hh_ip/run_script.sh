@@ -10,6 +10,12 @@ do
     else
         echo "$i EXITOSO"
     fi
+    
+done
 
-    sleep 5
+echo -e "\n\n##############################\n\n"
+
+for i in $cids;
+do
+    echo "$i $(grep -E '10\.' media/$i.log)"
 done

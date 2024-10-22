@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    {% load static %}
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" type="text/css" href="{% static 'modules/bootstrap.min.css' %}">
+    <script crossorigin src="{% static 'modules/bootstrap.bundle.min.js' %}"></script>
+    <script crossorigin src="{% static 'modules/react.development.js' %}"></script>
+    <script crossorigin src="{% static 'modules/react-dom.development.js' %}"></script>
+    <script crossorigin src="{% static 'modules/babel.js' %}"></script>
+
+    <title>REACT</title>
+  </head>
+  <body>
+    {% block content %}
+    {% endblock %}
+  </body>
+</html>

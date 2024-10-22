@@ -1,0 +1,40 @@
+{% extends 'base2.html' %}
+{% block content %}
+{% load static %}
+
+<nav class="navbar navbar-dark bg-primary">
+    <a class="navbar-brand" href="#">
+      <img src="{% static 'img/claro.png' %}" width="30" height="30" class="d-inline-block align-center" alt="">
+      Anexos - MINPUB
+    </a>
+    <a class="navbar-brand" href="{% url 'anexos-upload-list' %}" target="_self">
+      <span class="navbar-text" data-bs-toggle="tooltip" data-bs-html="true" data-bs-placement="bottom" data-bs-title="<strong>UPLOAD DATA</strong>">UPLOAD DATA</span>
+    </a>
+</nav>
+
+
+<div class="container">
+    <div class="row">
+      <div class="col-2"></div>
+      <div class="col-8">
+        <div class="row">
+            <div class="col-6"><img src="{% static 'img/claro.png' %}" height="120px" class="rounded mx-auto d-block" alt=""></div>
+            <div class="col-6"><img src="{% static 'img/minpub.png' %}"  height="120px" class="rounded mx-auto d-block" alt=""></div>
+        </div>
+      <div class="col-2"></div>
+    </div>
+    
+    <div class="row">
+      <div class="col-2"></div>
+      <div class="col-8" id="info"></div> 
+      <div class="col-2"></div>
+    </div>
+  </div>
+
+<script type="text/babel" src="{% static 'scripts/info_anexos.jsx' %}"></script>
+<script>
+    // TOOLTIP
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+</script>
+{% endblock %}

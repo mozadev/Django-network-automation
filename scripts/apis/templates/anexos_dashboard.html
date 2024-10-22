@@ -24,7 +24,7 @@
         <div class="row">
           <div class="col-6">
             <div class="card border-success mb-3" style="width: 300px; height: 150px;">
-              <div class="card-header text-success">Total de Anexos Subidos</div>
+              <div class="card-header text-success">Anexos en UP inicialmente</div>
               <div class="card-body text-success">
                 <p class="h1" style="text-align: center;"><span class="material-icons" style="color: blue;">arrow_right</span> {{ data.count }}</p>
               </div>
@@ -32,7 +32,7 @@
           </div>
           <div class="col-6">
             <div class="card text-white bg-warning mb-3" style="width: 300px; height: 150px;">
-              <div class="card-header">Resumen de Anexos</div>
+              <div class="card-header">Resumen de Anexos Actualmente</div>
               <div class="card-body">
                 <p class="h4" style="text-align: left;"><span class="material-icons" style="color: green;">arrow_drop_up</span><strong>UP</strong>: {{ data.up }} -- {{ data.up_rate }}% </p>
                 <p class="h4" style="text-align: left;"><span class="material-icons" style="color: red;">arrow_drop_down</span><strong>DOWN</strong>: {{ data.down }} -- {{ data.down_rate }}%</p> 
@@ -44,6 +44,7 @@
     </div>
     <div class="col-2"></div>
   </div>
+  
   <div class="row">
     <div class="col-2"></div>
     <div class="col-8">   
@@ -133,9 +134,9 @@
 }
 
 
-setInterval(function() {
-  location.reload();
-}, 300000);
+//setInterval(function() {
+//  location.reload();
+//}, 300000);
 
 </script>
 

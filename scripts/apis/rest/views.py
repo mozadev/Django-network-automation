@@ -221,7 +221,13 @@ class AnexosUploadCsvViewSet(viewsets.ViewSet):
             data, status_upload =  upload_anexos.clean_data(upload_excel, upload_fecha)
             if status_upload == 200:
                 new_register = []
-                AnexosRegistros.objects.filter(last=True).update(last=False)
+                anexos_registros = AnexosRegistros.objects.filter(last=True)
+                if anexos_registros.count() > 0:
+                    first = False
+                else:
+                    first = True
+                anexos_registros.update(last=False)
+
                 for item in data:
                     i = {}
                     anexo, creado = AnexosUpload.objects.get_or_create(
@@ -233,7 +239,8 @@ class AnexosUploadCsvViewSet(viewsets.ViewSet):
                         i["anexo"] = item["anexo"]
                         new_register.append(i)
 
-                    registro = AnexosRegistros.objects.create(key=anexo, status=item["status"], registro=item["registro"], last=True)
+                    AnexosRegistros.objects.create(key=anexo, status=item["status"], registro=item["registro"], last=True, first=first)
+
                     dashboard = reverse("anexos-upload-dashboard-list", request=request)
                 return Response({"msg": "DATOS SUBIDOS EXITOSAMENTE", "ver-dashboard": dashboard, "nuevos": new_register}, status=status.HTTP_200_OK)
             else:
@@ -247,20 +254,23 @@ class AnexosUploadDashboard(viewsets.ViewSet):
     DOCSTRING
     """
     permission_classes = [permissions.IsAuthenticated]
-    renderer_classes = [TemplateHTMLRenderer]
-    template_name="anexos_dashboard.html"
+    #renderer_classes = [TemplateHTMLRenderer]
+    #template_name="anexos_dashboard.html"
     
 
     def list(self, request):
         result={}
-        queryset = AnexosRegistros.objects.filter(last=True)
+        queryset_first_up = AnexosRegistros.objects.filter(first=True, status=True)
+        list_first_up = []
+        for i in queryset_first_up:
+            list_first_up.append(i.key.key)
+        queryset = AnexosRegistros.objects.filter(last=True, status=False, key__key__in=list_first_up)
         
-        result["count"] = queryset.count()
-        queryset = queryset.filter(status=False)
+        result["count"] = queryset_first_up.count()
         result["down"]  = queryset.count()
-        result["down_rate"] = "%.0f" % ((result["down"] / result["count"])  * 100) 
+        result["down_rate"] = "%.2f" % ((result["down"] / result["count"])  * 100) 
         result["up"]  = result["count"] - result["down"]
-        result["up_rate"] = "%.0f" % (100 - float(result["down_rate"]))
+        result["up_rate"] = "%.2f" % (100 - float(result["down_rate"]))
 
         queryset_values = queryset.values("key__key", "key__anexo", "registro", "status", "last")
         for item in queryset_values:
@@ -279,3 +289,14 @@ class AnexosUploadDashboard(viewsets.ViewSet):
         
         result["data"] = queryset_values
         return Response({"data": result})
+    
+
+class AnexosUploadDashboard2(viewsets.ViewSet):
+    """
+    DOCSTRING
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    renderer_classes = [TemplateHTMLRenderer]
+    template_name="anexos_dashboard2.html"
+    def list(self, request):
+        return Response(status=status.HTTP_200_OK)

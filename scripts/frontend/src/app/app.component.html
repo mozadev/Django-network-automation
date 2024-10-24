@@ -1,0 +1,60 @@
+<mat-toolbar color="primary">
+  <span>Anexos - MINPUB</span>
+</mat-toolbar>
+
+<mat-drawer-container class="my-drawer-container">
+  <mat-drawer mode="side" class="my-drawer" opened>
+    <mat-grid-list cols="1">
+      <mat-grid-tile>
+        <mat-card class="my-card">
+          <mat-card-header>
+            <mat-card-title>Claro</mat-card-title>
+          </mat-card-header>
+          <img mat-card-image src="/assets/claro.png" height="200px" alt="Photo of a Shiba Inu">
+        </mat-card>
+      </mat-grid-tile>
+      <mat-grid-tile>
+        <mat-card class="my-card">
+          <mat-card-header>
+            <mat-card-title>MINPUB</mat-card-title>
+          </mat-card-header>
+          <img mat-card-image src="/assets/minpub.png" height="200px" alt="Photo of a Shiba Inu">
+        </mat-card>
+      </mat-grid-tile>
+    </mat-grid-list>
+
+  </mat-drawer>
+  <mat-drawer-content class="my-drawer-content">
+    <h1>Dashboard</h1>
+    <mat-grid-list cols="5" rowHeight="200px">
+      <mat-grid-tile></mat-grid-tile>
+      <mat-grid-tile>
+        <mat-card>
+          <mat-card-header>
+            <mat-card-title>TODOS EN UP</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            ALL
+          </mat-card-content>
+        </mat-card>
+      </mat-grid-tile>
+      <mat-grid-tile>
+        <mat-card>
+          <mat-card-header>
+            <mat-card-title>RESUMEN</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            ALL
+          </mat-card-content>
+        </mat-card>
+      </mat-grid-tile>
+      <mat-grid-tile>1</mat-grid-tile>
+      <mat-grid-tile></mat-grid-tile>
+    </mat-grid-list>
+    <mat-grid-list cols="1" rowHeight="380px">
+      <mat-grid-tile>2</mat-grid-tile>
+    </mat-grid-list>
+  </mat-drawer-content>
+</mat-drawer-container>
+
+<router-outlet></router-outlet>

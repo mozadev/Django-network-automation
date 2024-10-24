@@ -1,0 +1,18 @@
+.my-drawer-content {
+    padding: 20px;
+}
+
+.my-drawer {
+    padding: 20px;
+    width: 300px;
+    height: 100%;
+}
+
+.my-drawer-container {
+    flex: 1 0 auto;
+}
+
+.my-card {
+    margin-bottom: 8px;
+    width: 200px;
+}

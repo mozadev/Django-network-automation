@@ -1,13 +1,14 @@
 from django.contrib.auth.models import Group, User
 from rest_framework import permissions, viewsets
 from rest.serializers import GroupSerializer, UserSerializer, ChangeVRFSerializer, ChangeVrfFromExcelSerializer, SuspensionAndReconnectionSerializer
-from rest.serializers import AnexosUploadCsvSerializer, AnexosUploadSerializer, AnexosRegistrosSerializer
+from rest.serializers import AnexosUploadCsvSerializer, InternetUpgradeSerializer
 from .models import AnexosRegistros, AnexosUpload
 from rest_framework.response import Response
 from rest_framework import status
 import rest.modules.update_vrf.utils as update_vrf
 import rest.modules.suspension.utils as suspension_reconnection
 import rest.modules.upload_anexos.utils as upload_anexos
+import rest.modules.internet_upgrade.utils as internet_upgrade
 from rest_framework.renderers import TemplateHTMLRenderer
 from rest_framework.reverse import reverse
 # from rest.modules.update_vrf.util.commands
@@ -300,3 +301,29 @@ class AnexosUploadDashboard2(viewsets.ViewSet):
     template_name="anexos_dashboard2.html"
     def list(self, request):
         return Response(status=status.HTTP_200_OK)
+    
+
+class InternetUpgrade(viewsets.ViewSet):
+    """
+    Este es la documentación
+    """
+    serializer_class = InternetUpgradeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def list(self, request):
+        return Response(status=status.HTTP_200_OK)
+    
+    def create(self, request):
+        serializer = InternetUpgradeSerializer(data=request.data)
+        if serializer.is_valid():
+            user_tacacs = serializer.validated_data["user_tacacs"]
+            pass_tacacs = serializer.validated_data["pass_tacacs"]
+            commit = serializer.validated_data["commit"]
+            cid = serializer.validated_data["cid"]
+            cid_list = cid.replace("\n", "").split("\r")
+            internet_upgrade.to_server(user_tacacs, pass_tacacs, cid_list, "xd", commit)
+            return Response(status=status.HTTP_200_OK)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        

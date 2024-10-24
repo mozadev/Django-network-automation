@@ -60,3 +60,12 @@ class AnexosRegistrosSerializer(serializers.ModelSerializer):
     class Meta:
         model = AnexosRegistros
         fields = "__all__"
+
+
+
+class InternetUpgradeSerializer(serializers.Serializer):
+    user_tacacs = serializers.CharField(required=True, label="Usuario TACACS")
+    pass_tacacs = serializers.CharField(style={'input_type': 'password'}, label="Password TACACS")
+    cid = serializers.CharField(required=True, label="CID", help_text="Ingresar los ciruitos de internet separados por un enter", max_length=1000, style={"base_template": "textarea.html", "rows": 3})
+    commit = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear los cambios?")
+    

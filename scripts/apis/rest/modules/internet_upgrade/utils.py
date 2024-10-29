@@ -11,8 +11,6 @@ TIME_SLEEP = 0.1
 
 def to_server(user_tacacs, pass_tacacs, cid_list, ip_owner, commit):
     load_dotenv()
-    TACASTS_USER = user_tacacs
-    TACASTS_PASS = pass_tacacs
     CYBERARK_USER = os.getenv("CYBERARK_USER")
     CYBERARK_PASS = os.getenv("CYBERARK_PASS")
     CYBERARK_IP = os.getenv("CYBERARK_IP")
@@ -46,9 +44,7 @@ def to_server(user_tacacs, pass_tacacs, cid_list, ip_owner, commit):
 
     except:
         return
-    
-    print(result)
-    return 
+    return result
 
 
 def to_router(child, user_tacacs, pass_tacacs, cid, commit):
@@ -56,6 +52,12 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit):
     ippe_found = None
     pesubinterface_found = None
     trafficpolicy_found = None
+    pe_ipmascara_found = None
+    mac_found = None
+    lldp_found = None
+    interface_cliente_found = None
+    trafficpolicy_cliente_found = None
+    interface_cpe_found = None
 
     # OBTENER LA WAN DEL CID
     child.send(f"hh {cid} | grep -v '^#' | awk \'{{print $1}}\'")
@@ -77,12 +79,14 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit):
     child.send(pass_tacacs)
     time.sleep(TIME_SLEEP)
     child.sendline("")
-    child.expect(r"\<.*\>")
+    prompt_server = child.expect([r"\<\S+\>", r"\]\$"])
+    if prompt_server == 1:
+        return f"No se pudo ingresar al {GET_PE}", 400
     
     child.send(f"display ip routing-table {wan_found}")
     time.sleep(TIME_SLEEP)
     child.sendline("")
-    child.expect(r"\<.*\>")
+    child.expect(r"\<\S+\>")
     output_ippe = child.before.decode("utf-8")
     ippe_pattern = re.search(r' +(\d+\.\d+\.\d+\.\d+) +', output_ippe)
     if ippe_pattern:
@@ -104,12 +108,17 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit):
     child.send(f"ssh -o StrictHostKeyChecking=no {user_tacacs}@{ippe_found}")
     time.sleep(TIME_SLEEP)
     child.sendline("")
-    child.expect("[Pp]assword:")
+    prompt_pe_ssh = child.expect([r"[Pp]assword:", r"\]\$"])
+    if prompt_pe_ssh == 1:
+        return f"No se pudo ingresar al PE {ippe_found} por ssh", 400
     child.send(pass_tacacs)
     time.sleep(TIME_SLEEP)
     child.sendline("")
-    child.expect(r"\<.*\>")
-
+    prompt_pe = child.expect([r"\<\S+\>", r"\]\$"])
+    if prompt_pe == 1:
+        return f"No se pudo ingresar al PE {ippe_found}", 400
+    
+    # OBTENER LA INTERFACE
     child.send(f"display ip routing-table {wan_found}")
     time.sleep(TIME_SLEEP)
     child.sendline("")
@@ -126,7 +135,7 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit):
         child.expect(r"\]\$")
 
         return f"SUBINTERFACE DEL PE {ippe_found} del CID {cid} no encontrado", 400
- 
+    # OBTENER LA IP - MASCARA - TRAFFIC-POLICY
     child.send(f"display curr int {pesubinterface_found}")
     time.sleep(TIME_SLEEP)
     child.sendline("")
@@ -134,8 +143,7 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit):
     time.sleep(TIME_SLEEP)
 
     output_trafficpolicy = child.before.decode("utf-8")
-    print(output_trafficpolicy)
-    trafficpolicy_pattern = re.findall(r'traffic-policy (\S+)', output_trafficpolicy)
+    trafficpolicy_pattern = re.findall(r'traffic-policy (\S+) (\S+)', output_trafficpolicy)
     if len(trafficpolicy_pattern) > 0:
         trafficpolicy_found = trafficpolicy_pattern
     else:
@@ -146,10 +154,192 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit):
 
         return f"traffic-policy NO ENCONTRADO EN SUBINTERFACE DEL PE {ippe_found} del CID {cid} no encontrado", 400
     
+    output_trafficpolicy = child.before.decode("utf-8")
+    pe_ipmascara_pattern = re.search(r'ip address (\d+\.\d+\.\d+\.\d+) (\d+\.\d+\.\d+\.\d+)', output_trafficpolicy)
+    if pe_ipmascara_pattern:
+        pe_ipmascara_found = { "ip": pe_ipmascara_pattern.group(1), "mascara": pe_ipmascara_pattern.group(2)}
+    else:
+        child.send(f"quit")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\]\$")
+
+        return f"IP y/o MÁSCARA NO ENCONTRADO EN SUBINTERFACE DEL PE {ippe_found} del CID {cid} no encontrado", 400
+    
+    
+    # OBTENER LA MAC DE LA WAN EN EL PE
+    child.send(f"display arp all | i {wan_found}")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"\<\S+\>")
+    time.sleep(TIME_SLEEP)
+
+    output_mac = child.before.decode("utf-8")
+    mac_pattern = re.search(r'(\d+\.\d+\.\d+\.\d+) +(\S+)', output_mac)
+    if mac_pattern:
+        mac_found = mac_pattern.group(2)
+    else:
+        child.send(f"quit")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\]\$")
+
+        return f"MAC NO ENCONTRADO EN EL PE {ippe_found} del CID {cid} no encontrado", 400
+    
+    # OBTENER SYSNAME CON LLDP
+    pesubinterface_physical = pesubinterface_found.split(".")[0]
+    child.send(f"display lldp neighbor interface {pesubinterface_physical} | no-more")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"\<\S+\>")
+    time.sleep(TIME_SLEEP)
+
+    output_lldp = child.before.decode("utf-8")
+    lldp_pattern = re.search(r'System name +:(\S+)', output_lldp)
+    if lldp_pattern:
+        lldp_found = lldp_pattern.group(1)
+    else:
+        child.send(f"quit")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\]\$")
+
+        return f"SYSNAME DEL EQUIPO LLDP NO ENCONTRADO EN EL PE {ippe_found} del CID {cid} no encontrado", 400
+
+    # INGRESANDO AL CPE 
+    child.send(f"telnet {wan_found}")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"[Uu]sername:")
+    child.send(user_tacacs)
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"[Pp]assword:")
+    child.send(pass_tacacs)
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    prompt_cpe = child.expect([r"\S+\>", r"\S+\#"])
+    if prompt_cpe == 0:
+        child.send("ena")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"[Pp]assword:")
+        child.send(pass_tacacs)
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\S+\#")
+    
+    child.send(f"terminal length 0")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"\S+\#")
+
+    child.send(f"sh ip int brief")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"\S+\#")
+
+    output_interface_cpe = child.before.decode("utf-8")
+    interface_cpe_pattern = re.search(rf'\n(\S+) +{wan_found}', output_interface_cpe)
+    if interface_cpe_pattern:
+        interface_cpe_found = interface_cpe_pattern.group(1)
+    else:
+        child.send("exit")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\<\S+\>")
+        child.send(f"quit")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\]\$")
+
+        return f"CPE: INTERFACE DEL NO ENCONTRADO del CID {cid} no encontrado", 400
+    
+    child.send(f"sh run int {interface_cpe_found}")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"\S+\#")
+
+    output_trafficpolicy_cpe = child.before.decode("utf-8")
+    trafficpolicy_cpe_pattern = re.search(rf'bandwidth (\d+)', output_trafficpolicy_cpe)
+    if trafficpolicy_cpe_pattern:
+        trafficpolicy_cpe_found = trafficpolicy_cpe_pattern.group(1)
+    else:
+        child.send("exit")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\<\S+\>")
+        child.send(f"quit")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\]\$")
+
+        return f"CPE: TRAFFICPOLICY NO ENCONTRADO del CID {cid} no encontrado", 400
+    
+    child.send("exit")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"\<\S+\>")
+###############################################33
+    child.send(f"quit")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"\]\$")
+
+    # INGRESANDO AL LLDP - INTERFACE DEL CLIENTE - ACCESO
+    child.send(f"ssh -o StrictHostKeyChecking=no {user_tacacs}@{lldp_found}")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    prompt_acceso = child.expect([r"[Pp]assword:", r"\]\$"])
+    if prompt_acceso == 1:
+        return f"No se pudo ingresar al ACCESO {lldp_found}", 400
+    
+    child.send(pass_tacacs)
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    prompt_acceso = child.expect([r"\<\S+\>", r"\]\$"])
+    if prompt_acceso == 1:
+        return f"No se pudo ingresar al ACCESO {lldp_found}", 400
+
+    child.send(f"display mac-address | i {mac_found} | no-more")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"\<\S+\>")
+    output_interface_cliente = child.before.decode("utf-8")
+    interface_cliente_pattern = re.search(rf'\n{mac_found} +(\S+) +(\S+)', output_interface_cliente)
+    if interface_cliente_pattern:
+        interface_cliente_found = interface_cliente_pattern.group(2)
+    else:
+        child.send(f"quit")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\]\$")
+
+        return f"LLDP: INTERFACE DEL CLIENTE  NO ENCONTRADO del CID {cid} no encontrado", 400
+    
+    # VER LA INTERFACE DEL CLIENTE
+    interface_cliente_found = interface_cliente_found.replace("GE", "Gi")
+    child.send(f"display curr int {interface_cliente_found}")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"\<\S+\>")
+    output_trafficpolicy_cliente = child.before.decode("utf-8")
+    trafficpolicy_cliente_pattern = re.findall(r'traffic-policy (\S+) (\S+)', output_trafficpolicy_cliente)
+    if len(trafficpolicy_cliente_pattern) > 0:
+        trafficpolicy_cliente_found = trafficpolicy_cliente_pattern
+    else:
+        child.send(f"quit")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\]\$")
+
+        return f"traffic-policy NO ENCONTRADO EN EL CLIENTE del CID {cid} no encontrado", 400
 
     child.send(f"quit")
     time.sleep(TIME_SLEEP)
     child.sendline("")
     child.expect(r"\]\$")
+
+
 
     return f"EXITO {cid} {wan_found}", 200

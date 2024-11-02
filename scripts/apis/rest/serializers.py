@@ -69,3 +69,7 @@ class InternetUpgradeSerializer(serializers.Serializer):
     cid = serializers.CharField(required=True, label="CID", help_text="Ingresar los ciruitos de internet separados por un enter", max_length=1000, style={"base_template": "textarea.html", "rows": 3})
     commit = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear los cambios?")
     
+
+class InterfacesStatusHuaweiSerializer(serializers.Serializer):
+    upload_excel = serializers.FileField(allow_empty_file=False, label="UPLOAD IP GESTION")
+    

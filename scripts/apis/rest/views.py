@@ -1,7 +1,7 @@
 from django.contrib.auth.models import Group, User
 from rest_framework import permissions, viewsets
 from rest.serializers import GroupSerializer, UserSerializer, ChangeVRFSerializer, ChangeVrfFromExcelSerializer, SuspensionAndReconnectionSerializer
-from rest.serializers import AnexosUploadCsvSerializer, InternetUpgradeSerializer
+from rest.serializers import AnexosUploadCsvSerializer, InternetUpgradeSerializer, InterfacesStatusHuaweiSerializer
 from .models import AnexosRegistros, AnexosUpload
 from rest_framework.response import Response
 from rest_framework import status
@@ -9,8 +9,10 @@ import rest.modules.update_vrf.utils as update_vrf
 import rest.modules.suspension.utils as suspension_reconnection
 import rest.modules.upload_anexos.utils as upload_anexos
 import rest.modules.internet_upgrade.utils as internet_upgrade
+import rest.modules.interfaces_status.utils as interfaces_status
 from rest_framework.renderers import TemplateHTMLRenderer
 from rest_framework.reverse import reverse
+from urllib.parse import urlparse
 # from rest.modules.update_vrf.util.commands
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -326,4 +328,43 @@ class InternetUpgrade(viewsets.ViewSet):
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+class InterfacesStatusHuaweiViewSets(viewsets.ViewSet):
+    """
+    Esta es la API para obtener el status de las interfaces en cada equipo Huawei.  
+    Las columnas en el excel de ingreso debe ser:   
+    1. _ip_gestion_
+
+    El comando para obtener los status es: 
+    `
+    display interface brief
+    `
+
+    Los status de las interfaces pueden ser:  
+    1. **ACTIVO**: Cuando el Physical y Protocol están en UP.  
+    2. **LIBRE**: Cuando el Physical y Protocol están en down.  
+    3. **DESCONOCIDO**: Cuando es distinto a ACTIVO y LIBRE.  
+    """
+    serializer_class = InterfacesStatusHuaweiSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def list(self, request):
+        return Response(status=status.HTTP_200_OK)
+    
+    def create(self, request):
+        serializer = InterfacesStatusHuaweiSerializer(data=request.data)
+        if serializer.is_valid() :
+            upload_excel = serializer.validated_data["upload_excel"]
+
+            list_ip_gestion = interfaces_status.list_ip(upload_excel)
+            link = reverse("interfaces-status-huawei-list", request=request)
+            parsed_url = urlparse(link)
+            base_url = f"{parsed_url.scheme}://{parsed_url.hostname}:{parsed_url.port}"
+            result = interfaces_status.to_server(list_ip_gestion, base_url)
+            if result[0] == 400:
+                return Response(result[1], status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response(result[1], status=status.HTTP_200_OK)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         

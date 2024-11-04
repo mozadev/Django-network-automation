@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 
 def to_router(action, user_tacacs, pass_tacacs, pe, sub_interface, suspension, commit):
-    load_dotenv()
+    load_dotenv(override=True)
     action = "suspension" if suspension else "reconnection"
     TACASTS_USER = user_tacacs
     TACASTS_PASS = pass_tacacs

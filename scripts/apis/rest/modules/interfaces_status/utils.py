@@ -13,7 +13,7 @@ TIME_SLEEP = 0.1
 
 
 def to_server(list_ip_gestion, link):
-    load_dotenv()
+    load_dotenv(override=True)
     CYBERARK_USER = os.getenv("CYBERARK_USER")
     CYBERARK_PASS = os.getenv("CYBERARK_PASS")
     CYBERARK_IP = os.getenv("CYBERARK_IP")

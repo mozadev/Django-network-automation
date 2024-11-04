@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 TIME_SLEEP = 0.1
 
 def to_router(action, user_tacacs, pass_tacacs, pe, sub_interface, vrf_new, vrf_old, cliente, password, commit):
-    load_dotenv()
+    load_dotenv(override=True)
     TACASTS_USER = user_tacacs
     TACASTS_PASS = pass_tacacs
     CYBERARK_USER = os.getenv("CYBERARK_USER")

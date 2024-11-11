@@ -9,7 +9,7 @@ import re
 TIME_SLEEP = 0.1
 
 
-def to_server(user_tacacs, pass_tacacs, cid_list, ip_owner, commit):
+def to_server(user_tacacs, pass_tacacs, cid_list, ip_owner, commit, bw):
     load_dotenv(override=True)
     CYBERARK_USER = os.getenv("CYBERARK_USER")
     CYBERARK_PASS = os.getenv("CYBERARK_PASS")
@@ -34,7 +34,7 @@ def to_server(user_tacacs, pass_tacacs, cid_list, ip_owner, commit):
         child.expect(r"\]\$")
         for cid in cid_list:
             item = {}
-            item["msg"], item["status"] = to_router(child, user_tacacs, pass_tacacs, cid, commit)
+            item["msg"], item["status"] = to_router(child, user_tacacs, pass_tacacs, cid, commit, bw)
             result.append(item)
             time.sleep(5)
         child.send("exit")
@@ -47,7 +47,7 @@ def to_server(user_tacacs, pass_tacacs, cid_list, ip_owner, commit):
     return result
 
 
-def to_router(child, user_tacacs, pass_tacacs, cid, commit):
+def to_router(child, user_tacacs, pass_tacacs, cid, commit, bw):
     wan_found = None
     ippe_found = None
     pesubinterface_found = None
@@ -180,6 +180,7 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit):
     trafficpolicy_pattern = re.findall(r'traffic-policy (\S+) (\S+)', output_trafficpolicy)
     if len(trafficpolicy_pattern) > 0:
         trafficpolicy_found = trafficpolicy_pattern
+    search_newbw(trafficpolicy_found, bw)
 
     output_trafficpolicy = child.before.decode("utf-8")
     pe_ipmascara_pattern = re.search(r'ip address (\d+\.\d+\.\d+\.\d+) (\d+\.\d+\.\d+\.\d+)', output_trafficpolicy)
@@ -454,7 +455,7 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit):
             "acceso_trafficpolicy": trafficpolicy_cliente_found,
             "acceso_os": acceso_os,
             "acceso_protocol": acceso_protocol,
-            "cpe_analisis": {
+            "acceso_analisis": {
                 "acceso_upgrade": None,
                 "acceso_commands": None,
             }
@@ -473,4 +474,29 @@ def is_mascara30(mascara):
     
 
 def cpe_huawei(child):
+    return
+
+
+def search_newbw(trafficpolicy = None, newbw = None):
+    if trafficpolicy:
+        # input
+        trafficpolicy_pattern_input =  re.search("(?P<pre>[a-zA-Z_]*)(?P<bw>\d+)(?P<post>[a-zA-Z_]*)", trafficpolicy[0][0])
+        # output 
+        trafficpolicy_pattern_output =  re.search("(?P<pre>[a-zA-Z_]*)(?P<bw>\d+)(?P<post>[a-zA-Z_]*)", trafficpolicy[1][0])
+
+        oldbw_input = int(trafficpolicy_pattern_input.group("bw"))
+        oldbw_output = int(trafficpolicy_pattern_output.group("bw"))
+
+        print(oldbw_input, oldbw_output)
+
+    else:
+        pass
+    
+
+def trafficpolicy_define():
+    return 
+
+
+def nomemclatura_bw(bw):
+    #if bw >= 1024
     return

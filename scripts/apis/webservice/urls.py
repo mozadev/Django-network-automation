@@ -40,6 +40,7 @@ router.register(r'anexos-upload-dashboard', views.AnexosUploadDashboard, basenam
 router.register(r'anexos-upload-dashboard-v2', views.AnexosUploadDashboard2, basename="anexos-upload-dashboard-v2")
 router.register(r'internet-upgrade', views.InternetUpgrade, basename='internet-upgrade')
 router.register(r'interfaces-status-huawei', views.InterfacesStatusHuaweiViewSets, basename='interfaces-status-huawei')
+router.register(r"read-pst-file", views.ReadCorreosPSTViewSets, basename='read-pst-file')
 
 # Wire up our API using automatic URL routing.
 # Additionally, we include login URLs for the browsable API.

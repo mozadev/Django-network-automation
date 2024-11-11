@@ -74,3 +74,6 @@ class InternetUpgradeSerializer(serializers.Serializer):
 class InterfacesStatusHuaweiSerializer(serializers.Serializer):
     upload_excel = serializers.FileField(allow_empty_file=False, label="UPLOAD IP GESTION")
     
+
+class ReadCorreosPSTSerializer(serializers.Serializer):
+    upload_pst = serializers.FileField(allow_empty_file=False, label="UPLOAD PST FILE")

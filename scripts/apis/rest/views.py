@@ -1,7 +1,7 @@
 from django.contrib.auth.models import Group, User
 from rest_framework import permissions, viewsets
 from rest.serializers import GroupSerializer, UserSerializer, ChangeVRFSerializer, ChangeVrfFromExcelSerializer, SuspensionAndReconnectionSerializer
-from rest.serializers import AnexosUploadCsvSerializer, InternetUpgradeSerializer, InterfacesStatusHuaweiSerializer
+from rest.serializers import AnexosUploadCsvSerializer, InternetUpgradeSerializer, InterfacesStatusHuaweiSerializer, ReadCorreosPSTSerializer
 from .models import AnexosRegistros, AnexosUpload
 from rest_framework.response import Response
 from rest_framework import status
@@ -13,7 +13,8 @@ import rest.modules.interfaces_status.utils as interfaces_status
 from rest_framework.renderers import TemplateHTMLRenderer
 from rest_framework.reverse import reverse
 from urllib.parse import urlparse
-# from rest.modules.update_vrf.util.commands
+import pypff
+from striprtf.striprtf import rtf_to_text
 
 class UserViewSet(viewsets.ModelViewSet):
     """
@@ -369,3 +370,31 @@ class InterfacesStatusHuaweiViewSets(viewsets.ViewSet):
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
+
+
+class ReadCorreosPSTViewSets(viewsets.ViewSet):
+    """
+    """
+    serializer_class = ReadCorreosPSTSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def list(self, request):
+        return Response({"msg": "Hello"}, status=status.HTTP_200_OK)
+    
+    def create(self, request):
+        serializer = ReadCorreosPSTSerializer(data=request.data)
+        if serializer.is_valid():
+            upload_pst = serializer.validated_data["upload_pst"]
+
+            file_pst = pypff.file()
+            file_pst.open("media/correos_pst/data.pst")
+            root_folder = file_pst.get_root_folder()
+            
+            for subfolder in root_folder.sub_folders:
+                for subsubfolder in subfolder.sub_folders:
+                    if subsubfolder.get_name() == "ASBANC":
+                        for message in subsubfolder.sub_messages:
+                            print("===> ", message.subject)
+                #print(dir(subfolder.get_name))
+                #print(subfolder.get_name())
+        return Response({"msg": "hello"}, status=status.HTTP_200_OK)

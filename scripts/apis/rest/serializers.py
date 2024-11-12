@@ -67,7 +67,7 @@ class InternetUpgradeSerializer(serializers.Serializer):
     user_tacacs = serializers.CharField(required=True, label="Usuario TACACS")
     pass_tacacs = serializers.CharField(style={'input_type': 'password'}, label="Password TACACS")
     cid = serializers.CharField(required=True, label="CID", help_text="Ingresar los ciruitos de internet separados por un enter", max_length=1000, style={"base_template": "textarea.html", "rows": 3})
-    newbw = serializers.IntegerField(required=True, min_value=0, label="Nuevo Ancho de Banda (Kbps)", help_text="Ejemplo: Lo ingresado para 1 Mega es 1024")
+    newbw = serializers.IntegerField(required=True, min_value=0, label="Nuevo Ancho de Banda (Mbps)")
     commit = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear los cambios?")
     
 

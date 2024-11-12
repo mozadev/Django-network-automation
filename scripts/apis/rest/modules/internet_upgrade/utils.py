@@ -9,7 +9,7 @@ import re
 TIME_SLEEP = 0.1
 
 
-def to_server(user_tacacs, pass_tacacs, cid_list, ip_owner, commit, bw):
+def to_server(user_tacacs, pass_tacacs, cid_list, ip_owner, commit, newbw):
     load_dotenv(override=True)
     CYBERARK_USER = os.getenv("CYBERARK_USER")
     CYBERARK_PASS = os.getenv("CYBERARK_PASS")
@@ -34,7 +34,7 @@ def to_server(user_tacacs, pass_tacacs, cid_list, ip_owner, commit, bw):
         child.expect(r"\]\$")
         for cid in cid_list:
             item = {}
-            item["msg"], item["status"] = to_router(child, user_tacacs, pass_tacacs, cid, commit, bw)
+            item["msg"], item["status"] = to_router(child, user_tacacs, pass_tacacs, cid, commit, newbw)
             result.append(item)
             time.sleep(5)
         child.send("exit")
@@ -47,7 +47,7 @@ def to_server(user_tacacs, pass_tacacs, cid_list, ip_owner, commit, bw):
     return result
 
 
-def to_router(child, user_tacacs, pass_tacacs, cid, commit, bw):
+def to_router(child, user_tacacs, pass_tacacs, cid, commit, newbw):
     wan_found = None
     ippe_found = None
     pesubinterface_found = None
@@ -180,7 +180,6 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit, bw):
     trafficpolicy_pattern = re.findall(r'traffic-policy (\S+) (\S+)', output_trafficpolicy)
     if len(trafficpolicy_pattern) > 0:
         trafficpolicy_found = trafficpolicy_pattern
-    search_newbw(trafficpolicy_found, bw)
 
     output_trafficpolicy = child.before.decode("utf-8")
     pe_ipmascara_pattern = re.search(r'ip address (\d+\.\d+\.\d+\.\d+) (\d+\.\d+\.\d+\.\d+)', output_trafficpolicy)
@@ -194,6 +193,8 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit, bw):
 
         return f"IP y/o MÁSCARA NO ENCONTRADO EN SUBINTERFACE DEL PE {ippe_found} del CID {cid} no encontrado", 400
     
+    # SEARCH NUEVO BW
+    newTrafficpolicyInPE  = search_newbw_inPE(child, trafficpolicy_found, newbw)
     # DIVIDIR ESCENARIOS DEPENDIENDO DE LA MASCARA
     pe_commands_list = None 
     pe_commands_is = is_mascara30(pe_ipmascara_found["mascara"])
@@ -423,6 +424,8 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit, bw):
 
     result = {
         "cid": cid,
+        "commit": commit,
+        "newBWinMegas": newbw,
         "wan_ofInternet": wan_found,
         "pe_device": {
             "pe": ippe_found,
@@ -434,7 +437,8 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit, bw):
             "pe_os": pe_os,
             "pe_protocol": pe_protocol,
             "pe_analisis": {
-                "pe_upgrade": pe_commands_is,
+                "pe_upgradeForMascara": pe_commands_is,
+                "pe_trafficpolicyDetail": newTrafficpolicyInPE if pe_commands_is else None,
                 "pe_commands": pe_commands_list,
             },
         },
@@ -477,18 +481,80 @@ def cpe_huawei(child):
     return
 
 
-def search_newbw(trafficpolicy = None, newbw = None):
+def search_newbw_inPE(child, trafficpolicy = None, newbw = None):
+    result = {}
+
     if trafficpolicy:
-        # input
         trafficpolicy_pattern_input =  re.search("(?P<pre>[a-zA-Z_]*)(?P<bw>\d+)(?P<post>[a-zA-Z_]*)", trafficpolicy[0][0])
-        # output 
         trafficpolicy_pattern_output =  re.search("(?P<pre>[a-zA-Z_]*)(?P<bw>\d+)(?P<post>[a-zA-Z_]*)", trafficpolicy[1][0])
 
         oldbw_input = int(trafficpolicy_pattern_input.group("bw"))
         oldbw_output = int(trafficpolicy_pattern_output.group("bw"))
 
-        print(oldbw_input, oldbw_output)
+        new_trafficpolicy_inMbps = trafficpolicy_pattern_input.group("pre") + f"{newbw}" + trafficpolicy_pattern_input.group("post")
+        new_trafficpolicy_outMbps = trafficpolicy_pattern_output.group("pre") + f"{newbw}" + trafficpolicy_pattern_output.group("post")
 
+        behavior_in = None
+        behavior_out = None
+        traffic_in = None
+        traffic_out = None
+
+        # IN
+        child.send(f"display curr configuration trafficpolicy {new_trafficpolicy_inMbps} | no-more")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"<[\w\-.]+>")
+
+        output_behavior_in = child.before.decode("utf-8")
+        output_behavior_pattern_in = re.search(r'classifier \S+ behavior ([\w\-.]+) ', output_behavior_in)
+        if output_behavior_pattern_in:
+            behavior_in = output_behavior_pattern_in.group(1)
+
+            child.send(f"display curr configuration behavior {behavior_in} | no-more")
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
+            child.expect(r"<[\w\-.]+>")
+
+            output_traffic_in = child.before.decode("utf-8")
+            output_traffic_pattern_in = re.search(r"car cir (\d+) ", output_traffic_in)
+            if output_traffic_pattern_in:
+                traffic_in = int(output_traffic_pattern_in.group(1))
+        
+        # OUT 
+        child.send(f"display curr configuration trafficpolicy {new_trafficpolicy_outMbps} | no-more")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"<[\w\-.]+>")
+
+        output_behavior_out = child.before.decode("utf-8")
+        output_behavior_pattern_out = re.search(r'classifier \S+ behavior ([\w\-.]+) ', output_behavior_out)
+        if output_behavior_pattern_out:
+            behavior_out = output_behavior_pattern_out.group(1)
+
+            child.send(f"display curr configuration behavior {behavior_out} | no-more")
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
+            child.expect(r"<[\w\-.]+>")
+
+            output_traffic_out = child.before.decode("utf-8")
+            output_traffic_pattern_out = re.search(r"car cir (\d+) ", output_traffic_out)
+            if output_traffic_pattern_out:
+                traffic_out = int(output_traffic_pattern_out.group(1))
+
+
+        result["new_trafficpolicy_inMbps"] = new_trafficpolicy_inMbps
+        result["new_trafficpolicy_outMbps"] = new_trafficpolicy_outMbps
+        if traffic_in == newbw * 1024:
+            result["new_trafficpolicy_in_iscreated"] = True
+        else:
+            result["new_trafficpolicy_in_iscreated"] = False
+
+        if traffic_out == newbw * 1024:
+            result["new_trafficpolicy_out_iscreated"] = True
+        else:
+            result["new_trafficpolicy_out_iscreated"] = False
+
+        return result
     else:
         pass
     
@@ -496,7 +562,3 @@ def search_newbw(trafficpolicy = None, newbw = None):
 def trafficpolicy_define():
     return 
 
-
-def nomemclatura_bw(bw):
-    #if bw >= 1024
-    return

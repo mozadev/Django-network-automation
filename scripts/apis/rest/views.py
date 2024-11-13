@@ -2,6 +2,7 @@ from django.contrib.auth.models import Group, User
 from rest_framework import permissions, viewsets
 from rest.serializers import GroupSerializer, UserSerializer, ChangeVRFSerializer, ChangeVrfFromExcelSerializer, SuspensionAndReconnectionSerializer
 from rest.serializers import AnexosUploadCsvSerializer, InternetUpgradeSerializer, InterfacesStatusHuaweiSerializer, ReadCorreosPSTSerializer
+from rest.serializers import UpgradeSOHuaweiSwitchSerializer
 from .models import AnexosRegistros, AnexosUpload
 from rest_framework.response import Response
 from rest_framework import status
@@ -10,6 +11,7 @@ import rest.modules.suspension.utils as suspension_reconnection
 import rest.modules.upload_anexos.utils as upload_anexos
 import rest.modules.internet_upgrade.utils as internet_upgrade
 import rest.modules.interfaces_status.utils as interfaces_status
+import rest.modules.upgrade_so.utils as upgrade_so
 from rest_framework.renderers import TemplateHTMLRenderer
 from rest_framework.reverse import reverse
 from urllib.parse import urlparse
@@ -395,6 +397,28 @@ class ReadCorreosPSTViewSets(viewsets.ViewSet):
                     if subsubfolder.get_name() == "ASBANC":
                         for message in subsubfolder.sub_messages:
                             print("===> ", message.subject)
-                #print(dir(subfolder.get_name))
-                #print(subfolder.get_name())
+
         return Response({"msg": "hello"}, status=status.HTTP_200_OK)
+
+
+class UpgradeSOHuaweiSwitchViewSets(viewsets.ViewSet):
+    """
+    Esta es la API para upgrade de SO de SWITCH HUAWEI
+    """
+    serializer_class = UpgradeSOHuaweiSwitchSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    def list(self, request):
+        return Response(status=status.HTTP_200_OK)
+    
+    def create(self, request):
+        serializer = UpgradeSOHuaweiSwitchSerializer(data=request.data)
+        if serializer.is_valid():
+            ip_switch = serializer.validated_data["ip_switch"]
+            link = reverse("upgrade-so-huawei-switch-list", request=request)
+            parsed_url = urlparse(link)
+            base_url = f"{parsed_url.scheme}://{parsed_url.hostname}:{parsed_url.port}"
+            ip_switch_list = ip_switch.replace("\n", "").split("\r")
+            result = upgrade_so.to_router(ip_switch_list, base_url)
+            return Response(result, status=status.HTTP_201_CREATED)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

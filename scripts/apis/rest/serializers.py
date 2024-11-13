@@ -77,3 +77,7 @@ class InterfacesStatusHuaweiSerializer(serializers.Serializer):
 
 class ReadCorreosPSTSerializer(serializers.Serializer):
     upload_pst = serializers.FileField(allow_empty_file=False, label="UPLOAD PST FILE")
+
+
+class UpgradeSOHuaweiSwitchSerializer(serializers.Serializer):
+    ip_switch = serializers.CharField(required=True, label="IPv4 del SWITCH", help_text="Ingresar las IPv4 separados por un Enter", max_length=1000, style={"base_template": "textarea.html", "rows": 3})

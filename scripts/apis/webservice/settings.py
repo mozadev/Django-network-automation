@@ -156,9 +156,9 @@ REST_FRAMEWORK = {
 
 CORS_ORIGIN_ALLOW_ALL = True
 
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:4200',
-    'http://10.200.90.117:4200',
-]
+#CORS_ALLOWED_ORIGINS = [
+#    'http://localhost:4200',
+#    'http://10.200.90.117:4200',
+#]
 
 CORS_ALLOW_CREDENTIALS = True

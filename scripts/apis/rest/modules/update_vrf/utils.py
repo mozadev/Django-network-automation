@@ -88,8 +88,6 @@ def to_router(action, user_tacacs, pass_tacacs, pe, sub_interface, vrf_new, vrf_
         child.sendline("")
         
         for command in commands_to_huawei(sub_interface, vrf_new, vrf_old, ip_interface, ip_vrf, cid_found, cliente, asnumber_found, password, group_found, commit, ip_mra_found, mascara_mra_found):
-            #print(command["command"])
-            #continue
             prompt = child.expect([command["prompt"], "which will affect BGP peer relationship establishment\. Are you sure you want to continue\? \[Y\/N\]:"])
             if prompt == 0:
                 child.send(command["command"])

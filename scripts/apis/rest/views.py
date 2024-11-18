@@ -414,11 +414,15 @@ class UpgradeSOHuaweiSwitchViewSets(viewsets.ViewSet):
         serializer = UpgradeSOHuaweiSwitchSerializer(data=request.data)
         if serializer.is_valid():
             ip_switch = serializer.validated_data["ip_switch"]
+            so_upgrade = serializer.validated_data["so_upgrade"]
+            parche_upgrade = serializer.validated_data["parche_upgrade"]
+
             link = reverse("upgrade-so-huawei-switch-list", request=request)
             parsed_url = urlparse(link)
             base_url = f"{parsed_url.scheme}://{parsed_url.hostname}:{parsed_url.port}"
             ip_switch_list = ip_switch.replace("\n", "").split("\r")
-            result = upgrade_so.to_router(ip_switch_list, base_url)
+            
+            result = upgrade_so.to_router(ip_switch_list, base_url, so_upgrade, parche_upgrade)
             return Response(result, status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

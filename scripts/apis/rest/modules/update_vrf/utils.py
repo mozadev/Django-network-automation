@@ -24,7 +24,7 @@ def to_router(action, user_tacacs, pass_tacacs, pe, sub_interface, vrf_new, vrf_
 
     try:
         # Ingreso al Cyberark
-        child = pexpect.spawn(f"ssh -o StrictHostKeyChecking=no {CYBERARK_USER}@{CYBERARK_IP}", timeout=30)
+        child = pexpect.spawn(f"ssh -o StrictHostKeyChecking=no {CYBERARK_USER}@{CYBERARK_IP}", timeout=60)
         child.logfile = open(name_file, "wb")
         child.expect("[Pp]assword:")
         child.sendline(CYBERARK_PASS)

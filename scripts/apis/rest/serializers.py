@@ -1,6 +1,6 @@
 from django.contrib.auth.models import Group, User
 from rest_framework import serializers
-from datetime import datetime
+from datetime import datetime, date
 from .models import AnexosRegistros, AnexosUpload
 
 
@@ -83,3 +83,44 @@ class UpgradeSOHuaweiSwitchSerializer(serializers.Serializer):
     ip_switch = serializers.CharField(required=True, label="IPv4 del SWITCH", help_text="Ingresar las IPv4 separados por un Enter", max_length=1000, style={"base_template": "textarea.html", "rows": 3})
     so_upgrade = serializers.CharField(required=True, label="Nuevo Sistema Operativo Huawei")
     parche_upgrade = serializers.CharField(required=True, label="Nuevo Parche del Sistema Operativo Huawei")
+
+
+class UploadCorreosTicketsSerializer(serializers.Serializer):
+    correos_zenaida_csv = serializers.FileField(allow_empty_file=False, label="UPLOAD CORREOS DE ZENAIDA EN CSV", required=True)
+    correos_mpfn_csv = serializers.FileField(allow_empty_file=False, label="UPLOAD CORREOS OTROS-MPFN EN CSV", required=True)
+    correos_entrada_csv = serializers.FileField(allow_empty_file=False, label="UPLOAD CORREOS DE BANDEJA DE ENTRADA EN CSV", required=True)
+    correos_fecha = serializers.DateField(initial=date.today(), label="FECHA DE UPLOAD CORREO", required=True)
+
+    def validate_correos_zenaida_csv(self, value):
+        if not value.name.endswith('.csv'):
+            raise serializers.ValidationError("Solo se permiten archivos con formato .csv de la bandeja ZENAIDA")
+        if value.content_type != 'text/csv':
+            raise serializers.ValidationError("El archivo debe ser de tipo CSV.")
+        return value
+    
+    def validate_correos_mpfn_csv(self, value):
+        if not value.name.endswith('.csv'):
+            raise serializers.ValidationError("Solo se permiten archivos con formato .csv de la bandeja OTROS-MPFN")
+        if value.content_type != 'text/csv':
+            raise serializers.ValidationError("El archivo debe ser de tipo CSV.")
+        return value
+    
+    def validate_correos_entrada_csv(self, value):
+        if not value.name.endswith('.csv'):
+            raise serializers.ValidationError("Solo se permiten archivos con formato .csv de la BANDEJA DE ENTRADA")
+        if value.content_type != 'text/csv':
+            raise serializers.ValidationError("El archivo debe ser de tipo CSV.")
+        return value
+
+
+class UploadSGATicketsSerializer(serializers.Serializer):
+    sga_csv = serializers.FileField(allow_empty_file=False, label="UPLOAD SGA CSV", required=True)
+    sga_fecha = serializers.DateField(initial=date.today(), label="FECHA DEL SGA", required=True)
+
+    def validate_sga_csv(self, value):
+        if not value.name.endswith('.csv'):
+            raise serializers.ValidationError("Solo se permiten archivos con formato .csv del SGA")
+        if value.content_type != 'text/csv':
+            raise serializers.ValidationError("El archivo debe ser de tipo CSV.")
+        return value
+

@@ -397,9 +397,9 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit, newbw):
     child.sendline("")
     child.expect(r"\<\S+\>")
     output_interface_cliente = child.before.decode("utf-8")
-    interface_cliente_pattern = re.search(rf'\n{mac_found} +(\S+) +(\S+)', output_interface_cliente)
+    interface_cliente_pattern = re.search(rf'\n{mac_found} +\S+ +(\S+)', output_interface_cliente)
     if interface_cliente_pattern:
-        interface_cliente_found = interface_cliente_pattern.group(2)
+        interface_cliente_found = interface_cliente_pattern.group(1)
     else:
         child.send(f"quit")
         time.sleep(TIME_SLEEP)
@@ -409,7 +409,10 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit, newbw):
         return f"LLDP: INTERFACE DEL CLIENTE  NO ENCONTRADO del CID {cid} no encontrado", 400
     
     # VER LA INTERFACE DEL CLIENTE
-    interface_cliente_found = interface_cliente_found.replace("GE", "Gi")
+    if re.search(r"^\d+", interface_cliente_found):
+        pass
+    else:
+        interface_cliente_found = interface_cliente_found.replace("GE", "Gi")
     child.send(f"display curr int {interface_cliente_found}")
     time.sleep(TIME_SLEEP)
     child.sendline("")

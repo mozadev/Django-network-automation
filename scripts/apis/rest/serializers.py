@@ -114,13 +114,13 @@ class UploadCorreosTicketsSerializer(serializers.Serializer):
 
 
 class UploadSGATicketsSerializer(serializers.Serializer):
-    sga_csv = serializers.FileField(allow_empty_file=False, label="UPLOAD SGA CSV", required=True)
+    sga_csv = serializers.FileField(allow_empty_file=False, label="UPLOAD SGA EXCEL", required=True)
     sga_fecha = serializers.DateField(initial=date.today(), label="FECHA DEL SGA", required=True)
 
     def validate_sga_csv(self, value):
-        if not value.name.endswith('.csv'):
-            raise serializers.ValidationError("Solo se permiten archivos con formato .csv del SGA")
-        if value.content_type != 'text/csv':
-            raise serializers.ValidationError("El archivo debe ser de tipo CSV.")
+        if not value.name.endswith('.xlsx'):
+            raise serializers.ValidationError("Solo se permiten archivos con formato .xlsx del SGA")
+        if value.content_type != 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+            raise serializers.ValidationError("El archivo debe ser de tipo .xlsx")
         return value
 

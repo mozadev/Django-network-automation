@@ -145,16 +145,12 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit, newbw):
     time.sleep(TIME_SLEEP)
     child.sendline("")
     child.expect(r"\<.*\>")
-
     output_pesubinterface = child.before.decode("utf-8")
-    pesubinterface_pattern = re.search(r'(GigabitEthernet\S+|Virtual-Ethernet\S+)', output_pesubinterface)
+    pesubinterface_pattern = re.search(r'\s*\S+ +\S+ +\S+ +\S+ +\S+ +\d+\.\d+\.\d+\.\d+ +(\S+)', output_pesubinterface)
+
     if pesubinterface_pattern:
         pesubinterface_found = pesubinterface_pattern.group(1)
-        pesubinterface_physical = pesubinterface_found.split(".")[0]
-    else:
-        pesubinterfacetrunk_pattern = re.search(r'(Eth-Trunk\S+)', output_pesubinterface)
-        if pesubinterfacetrunk_pattern:
-            pesubinterface_found = pesubinterfacetrunk_pattern.group(1)
+        if re.search( r"Eth-Trunk",pesubinterface_found):       
             pesubinterfacetrunk = pesubinterface_found.split(".")[0]
             child.send(f"display interface {pesubinterfacetrunk} | no-more ")
             time.sleep(TIME_SLEEP)
@@ -172,12 +168,14 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit, newbw):
 
                 return f"SUBINTERFACE TRUNK DEL PE {ippe_found} del CID {cid} no encontrado, ninguno está en UP", 400
         else:
-            child.send(f"quit")
-            time.sleep(TIME_SLEEP)
-            child.sendline("")
-            child.expect(r"\]\$")
+            pesubinterface_physical = pesubinterface_found.split(".")[0]
+    else:
+        child.send(f"quit")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\]\$")
 
-            return f"NO SE ENCUENTRA SUBINTERFACE DEL PE {ippe_found} del CID {cid} no encontrado", 400
+        return f"NO SE ENCUENTRA SUBINTERFACE DEL PE {ippe_found} del CID {cid} no encontrado", 400
         
     # OBTENER LA IP - MASCARA - TRAFFIC-POLICY
     child.send(f"display curr int {pesubinterface_found} | no-more")

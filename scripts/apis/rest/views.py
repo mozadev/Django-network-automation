@@ -2,7 +2,7 @@ from django.contrib.auth.models import Group, User
 from rest_framework import permissions, viewsets
 from rest.serializers import GroupSerializer, UserSerializer, ChangeVRFSerializer, ChangeVrfFromExcelSerializer, SuspensionAndReconnectionSerializer
 from rest.serializers import AnexosUploadCsvSerializer, InternetUpgradeSerializer, InterfacesStatusHuaweiSerializer, ReadCorreosPSTSerializer
-from rest.serializers import UpgradeSOHuaweiSwitchSerializer
+from rest.serializers import UpgradeSOHuaweiSwitchSerializer, UploadCorreosTicketsSerializer, UploadSGATicketsSerializer
 from .models import AnexosRegistros, AnexosUpload
 from rest_framework.response import Response
 from rest_framework import status
@@ -426,3 +426,40 @@ class UpgradeSOHuaweiSwitchViewSets(viewsets.ViewSet):
             return Response(result, status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+
+class UploadCorreosTicketsViewSet(viewsets.ViewSet):
+    """
+    Esta es la API para procesar los correos a partir
+    """
+    serializer_class = UploadCorreosTicketsSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def list(self, request):
+        return Response(status=status.HTTP_200_OK)
+    
+    def create(self, request):
+        serializer = UploadCorreosTicketsSerializer(data=request.data)
+        if serializer.is_valid():
+            return Response({"detail": "archivos subidos"}, status=status.HTTP_202_ACCEPTED)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+class UploadSGATicketsViewSet(viewsets.ViewSet):
+    """
+    Esta es la API para procesar los tickes del SGA
+    """
+    serializer_class = UploadSGATicketsSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def list(self, request):
+        return Response(status=status.HTTP_200_OK)
+    
+    def create(self, request):
+        serializer = UploadSGATicketsSerializer(data=request.data)
+        if serializer.is_valid():
+            return Response({"detail": "archivos subidos"}, status=status.HTTP_202_ACCEPTED)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        

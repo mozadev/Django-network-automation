@@ -56,14 +56,8 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
     FTP_USER = os.getenv("FTP_USER")
     FTP_PASS = os.getenv("FTP_PASS")
     interface_ip = None
-    soInSwitch = False
-    parcheInSwitch = False
-    sizeFree = None
-    listSOInSwitch = []
-    listParcheInSwitch = []
     soSizeInFTPInMegas = None
     parcheSizeInFTPInMegas = None
-    sufficientCapacity = None
 
     child.send(f"telnet {ip}")
     time.sleep(TIME_SLEEP)
@@ -146,30 +140,7 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
             if output_ping_pattern:
                 interface_ip = ip_item
                 break
-
-        child.send(f"dir")
-        time.sleep(TIME_SLEEP)
-        child.sendline("")
-        child.expect(r"\s<[\w\-.]+>")
-        output_dirInSwitch = child.before.decode("utf-8")
-        output_soInSwitch_pattern = re.search(rf'\b{so_upgrade}\b', output_dirInSwitch)
-        output_parcheInSwitch_pattern = re.search(rf'\b{parche_upgrade}\b', output_dirInSwitch)
-        output_sizeInSwitch_pattern = re.search(r' KB total \((\S+) KB free\)', output_dirInSwitch)
-        listSOInSwitch_pattern = re.findall(r' (\S+) +\S+ +\S+ +\S+ +\S+ +(\S+\.cc)\s', output_dirInSwitch)
-        listParcheInSwitch_pattern = re.findall(r' (\S+) +\S+ +\S+ +\S+ +\S+ +(\S+\.PAT)\s', output_dirInSwitch)
-        
-        if output_soInSwitch_pattern:
-            soInSwitch = True
-        if output_parcheInSwitch_pattern:
-            parcheInSwitch = True
-        if output_sizeInSwitch_pattern:
-            sizeFree = output_sizeInSwitch_pattern.group(1)
-            sizeFree = round(int(re.sub(",", "", sizeFree)) / 1024, 2)
-        for so_item in listSOInSwitch_pattern:
-            listSOInSwitch.append({"sizeSOInMB": round(int(re.sub(",", "", so_item[0])) / (1024 * 1024), 2), "nameSO": so_item[1]})
-        for parche_item in listParcheInSwitch_pattern:
-            listParcheInSwitch.append({"sizeParcheInMB": round(int(re.sub(",", "", parche_item[0])) / (1024 * 1024), 2), "nameParche": parche_item[1]})
-
+    
     if interface_ip:
         child.send(f"ftp -a {ip_item} {FILE_SERVER}")
         time.sleep(TIME_SLEEP)
@@ -201,35 +172,66 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
         child.sendline("")
         child.expect(r"\s<[\w\-.]+>")
 
-        # User(172.19.216.127:(none)):
-        #child.expect(r"\s<[\w\-.]+>")
-        #output_ping = child.before.decode("utf-8")
-        #output_ping_pattern = re.findall(r'round-trip min\/avg\/max ', output_ping)
+    for stack in result_stack: 
+        child.send("dir {stack}#flash:/".format(stack=stack["MemberID"]))
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\s<[\w\-.]+>")
+
+        output_dirInStack = child.before.decode("utf-8")
+        output_soInStack_pattern = re.search(rf'\b{so_upgrade}\b', output_dirInStack)
+        output_parcheInStack_pattern = re.search(rf'\b{parche_upgrade}\b', output_dirInStack)
+        output_sizeInStack_pattern = re.search(r' KB total \((\S+) KB free\)', output_dirInStack)
+        listSOInStack_pattern = re.findall(r' (\S+) +\S+ +\S+ +\S+ +\S+ +(\S+\.cc)\s', output_dirInStack)
+        listParcheInStack_pattern = re.findall(r' (\S+) +\S+ +\S+ +\S+ +\S+ +(\S+\.PAT)\s', output_dirInStack)
+        
+        if output_soInStack_pattern:
+            stack["soInStack"] = True
+        else:
+            stack["soInStack"] = False
+        if output_parcheInStack_pattern:
+            stack["parcheInStack"]  = True
+        else:
+            stack["parcheInStack"]  = False
+        if output_sizeInStack_pattern:
+            sizeFreeInStack = output_sizeInStack_pattern.group(1)
+            stack["sizeFreeInStack"]  = round(int(re.sub(",", "", sizeFreeInStack)) / 1024, 2)
+        else:
+            stack["sizeFreeInStack"] = None
+        listSOInStack = []
+        listParcheInStack = []
+        for so_item in listSOInStack_pattern:
+            listSOInStack.append({"sizeSOInMB": round(int(re.sub(",", "", so_item[0])) / (1024 * 1024), 2), "nameSO": so_item[1]})
+        for parche_item in listParcheInStack_pattern:
+            listParcheInStack.append({"sizeParcheInMB": round(int(re.sub(",", "", parche_item[0])) / (1024 * 1024), 2), "nameParche": parche_item[1]})
+
+        stack["listSOInStack"] = listSOInStack
+        stack["listParcheInStack"] = listParcheInStack
+        if isinstance(soSizeInFTPInMegas, float) and isinstance(parcheSizeInFTPInMegas, float) and isinstance(stack["sizeFreeInStack"], float):
+            if (stack["sizeFreeInStack"] - (soSizeInFTPInMegas + parcheSizeInFTPInMegas)) > 0:
+                stack["sufficientCapacityInStack"]  = True
+            else:
+                stack["sufficientCapacityInStack"] = False
+        else:
+            stack["sizeFreeInStack"] = None 
+            stack["sufficientCapacityInStack"] = None
+
+
 
     child.send(f"quit")
     time.sleep(TIME_SLEEP)
     child.sendline("")
     child.expect(r"\]\$")
 
-    if isinstance(soSizeInFTPInMegas, float) and isinstance(parcheSizeInFTPInMegas, float) and isinstance(sizeFree, float):
-        if (sizeFree - (soSizeInFTPInMegas + parcheSizeInFTPInMegas)) > 0:
-            sufficientCapacity = True
-        else:
-            sufficientCapacity = False
 
-    result["IPv4OfStack"] = ip 
-    result["stacks"] = result_stack
+
+    result["IPv4OfStack"] = ip
     result["countStacks"] = len(result_stack)
     result["versionSwitch"] = version
     result["versionByStack"] = result_startup
     result["Vlanif199_isFound"] = vlanif199
     result["ipForPingAndFTP"] = interface_ip
-    result["soInSwitch"] = soInSwitch
-    result["parcheInSwitch"] = parcheInSwitch
-    result["sizeFreeInMB"] = sizeFree
-    result["listSOInSwitch"] = listSOInSwitch
-    result["listParcheInSwitch"] = listParcheInSwitch
     result["soSizeInFTPInMB"] = soSizeInFTPInMegas
     result["parcheSizeInFTPInMB"] = parcheSizeInFTPInMegas
-    result["sufficientCapacity"] = sufficientCapacity
+    result["stacks"] = result_stack
     return result

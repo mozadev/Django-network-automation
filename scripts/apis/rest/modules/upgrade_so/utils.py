@@ -216,14 +216,10 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
             stack["sizeFreeInStack"] = None 
             stack["sufficientCapacityInStack"] = None
 
-
-
     child.send(f"quit")
     time.sleep(TIME_SLEEP)
     child.sendline("")
     child.expect(r"\]\$")
-
-
 
     result["IPv4OfStack"] = ip
     result["countStacks"] = len(result_stack)

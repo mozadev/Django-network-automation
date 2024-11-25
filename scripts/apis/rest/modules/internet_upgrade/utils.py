@@ -371,7 +371,11 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit, newbw):
     child.expect(r"\]\$")
 
     # INGRESANDO AL LLDP - INTERFACE DEL CLIENTE - ACCESO
-    child.send(f"ssh -o StrictHostKeyChecking=no {user_tacacs}@{lldp_found}")
+    if re.match(r"tmetro", lldp_found, re.IGNORECASE):
+        user_tacacs_tmetro = user_tacacs.lower()
+        child.send(f"ssh -o StrictHostKeyChecking=no {user_tacacs_tmetro}@{lldp_found}")
+    else:
+        child.send(f"ssh -o StrictHostKeyChecking=no {user_tacacs}@{lldp_found}")
     time.sleep(TIME_SLEEP)
     child.sendline("")
     prompt_acceso = child.expect([r"[Pp]assword:", r"\]\$"])
@@ -381,9 +385,20 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit, newbw):
     child.send(pass_tacacs)
     time.sleep(TIME_SLEEP)
     child.sendline("")
-    prompt_acceso = child.expect([r"\<\S+\>", r"\]\$"])
+    prompt_acceso = child.expect([r"\n<[\w\-.]+>", r"\]\$", r"\n\S+::>"])
     if prompt_acceso == 1:
         return f"No se pudo ingresar al ACCESO {lldp_found} del cid {cid}", 400
+    elif prompt_acceso == 2:
+        child.send("quit")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        tmetro_output = child.expect([r"\]\$", r"There are unsaved changes\. Do you really want to quit\? \(yes or no\) \(no\)"])
+        if tmetro_output == 1:
+            child.send("yes")
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
+            child.expect(r"\]\$")
+        return f"El ACCESO {lldp_found} del cid {cid} es un TMETRO", 400
     
     acceso_os = "huawei"
     acceso_protocol = "ssh"

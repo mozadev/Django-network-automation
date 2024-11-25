@@ -58,6 +58,7 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
     interface_ip = None
     soSizeInFTPInMegas = None
     parcheSizeInFTPInMegas = None
+    routersFTP = []
 
     child.send(f"telnet {ip}")
     time.sleep(TIME_SLEEP)
@@ -128,21 +129,21 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
         child.expect(r"\s<[\w\-.]+>")
         output_interfaceVlanif199 = child.before.decode("utf-8")
         output_interfaceVlanif199_pattern = re.findall(r'ip address (\d+\.\d+\.\d+\.\d+) ', output_interfaceVlanif199)
-        output_interfaceVlanif199_pattern.reverse()
+        routersFTP = routersFTPFromIPv4(output_interfaceVlanif199_pattern, FILE_SERVER)
         
-        for ip_item in output_interfaceVlanif199_pattern:
-            child.send(f"ping -a {ip_item} {FILE_SERVER}")
+        for ftp_item in routersFTP:
+            child.send(f"ping {ftp_item}")
             time.sleep(TIME_SLEEP)
             child.sendline("")
             child.expect(r"\s<[\w\-.]+>")
             output_ping = child.before.decode("utf-8")
             output_ping_pattern = re.findall(r'round-trip min\/avg\/max ', output_ping)
             if output_ping_pattern:
-                interface_ip = ip_item
+                interface_ip = ftp_item
                 break
     
     if interface_ip:
-        child.send(f"ftp -a {ip_item} {FILE_SERVER}")
+        child.send(f"ftp {interface_ip}")
         time.sleep(TIME_SLEEP)
         child.sendline("")
         child.expect(r"\)\):")
@@ -183,7 +184,7 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
         output_parcheInStack_pattern = re.search(rf'\b{parche_upgrade}\b', output_dirInStack)
         output_sizeInStack_pattern = re.search(r' KB total \((\S+) KB free\)', output_dirInStack)
         listSOInStack_pattern = re.findall(r' (\S+) +\S+ +\S+ +\S+ +\S+ +(\S+\.cc)\s', output_dirInStack)
-        listParcheInStack_pattern = re.findall(r' (\S+) +\S+ +\S+ +\S+ +\S+ +(\S+\.PAT)\s', output_dirInStack)
+        listParcheInStack_pattern = re.findall(r' (\S+) +\S+ +\S+ +\S+ +\S+ +(\S+\.PAT|\S+\.pat)\s', output_dirInStack)
         
         if output_soInStack_pattern:
             stack["soInStack"] = True
@@ -216,6 +217,64 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
             stack["sizeFreeInStack"] = None 
             stack["sufficientCapacityInStack"] = None
 
+    result_stack = sorted(result_stack, key=master_isFirst)
+    
+    for stack in result_stack:
+        if stack["Role"] == "Master":
+            # IR AL SERVIDOR FTP
+            if stack["sufficientCapacityInStack"]:
+                child.send(f"ftp {interface_ip}")
+                time.sleep(TIME_SLEEP)
+                child.sendline("")
+                child.expect(r"\)\):")
+                child.send(FTP_USER)
+                time.sleep(TIME_SLEEP)
+                child.sendline("")
+                child.expect(r"[Pp]assword:")
+                child.send(FTP_PASS)
+                time.sleep(TIME_SLEEP)
+                child.sendline("")
+                child.expect(r"\n\[ftp\]")
+
+                if not stack["soInStack"]:
+                    child.send(rf"get {so_upgrade}")
+                    time.sleep(TIME_SLEEP)
+                    child.sendline("")
+                    child.expect(r"\n\[ftp\]")
+                if not stack["parcheInStack"]:
+                    child.send(rf"get {parche_upgrade}")
+                    time.sleep(TIME_SLEEP)
+                    child.sendline("")
+                    child.expect(r"\n\[ftp\]")
+
+                child.send(r"quit")
+                time.sleep(TIME_SLEEP)
+                child.sendline("")
+                child.expect(r"\s<[\w\-.]+>")
+        else:
+            # SOLO COPIAR DE UN STACK A OTRO
+            memberID = stack["MemberID"]
+            if stack["sufficientCapacityInStack"]:
+                if not stack["soInStack"]:
+                    child.send(f"copy {so_upgrade} {memberID}#flash:")
+                    time.sleep(TIME_SLEEP)
+                    child.sendline("")
+                    child.expect(r"\[Y\/N\]:")
+                    child.send(f"Y")
+                    time.sleep(TIME_SLEEP)
+                    child.sendline("")
+                    child.expect(r"\s<[\w\-.]+>")
+
+                if not stack["parcheInStack"]:
+                    child.send(f"copy {parche_upgrade} {memberID}#flash:")
+                    time.sleep(TIME_SLEEP)
+                    child.sendline("")
+                    child.expect(r"\[Y\/N\]:")
+                    child.send(f"Y")
+                    time.sleep(TIME_SLEEP)
+                    child.sendline("")
+                    child.expect(r"\s<[\w\-.]+>")
+
     child.send(f"quit")
     time.sleep(TIME_SLEEP)
     child.sendline("")
@@ -226,8 +285,22 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
     result["versionSwitch"] = version
     result["versionByStack"] = result_startup
     result["Vlanif199_isFound"] = vlanif199
-    result["ipForPingAndFTP"] = interface_ip
+    result["PingToFTP"] = f"ping {interface_ip}"
     result["soSizeInFTPInMB"] = soSizeInFTPInMegas
     result["parcheSizeInFTPInMB"] = parcheSizeInFTPInMegas
     result["stacks"] = result_stack
     return result
+
+
+def routersFTPFromIPv4(list_ip, ftp_server):
+    result = [f"-a {i} {ftp_server}" for i in list_ip]
+    result.append(f"{ftp_server}")
+    result.reverse()
+    return result
+
+
+def master_isFirst(elemento):
+    return 0 if elemento["Role"] == "Master" else 1
+
+# copy <archivo> n#flash:
+# [Y/N]:y

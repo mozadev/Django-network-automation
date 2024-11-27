@@ -59,6 +59,8 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
     soSizeInFTPInMegas = None
     parcheSizeInFTPInMegas = None
     routersFTP = []
+    soInMaster = False
+    parcheInMaster = False
 
     child.send(f"telnet {ip}")
     time.sleep(TIME_SLEEP)
@@ -218,7 +220,8 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
             stack["sufficientCapacityInStack"] = None
 
     result_stack = sorted(result_stack, key=master_isFirst)
-    
+    print(result_stack)
+    child.timeout = 1800
     for stack in result_stack:
         if stack["Role"] == "Master":
             # IR AL SERVIDOR FTP
@@ -241,11 +244,13 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
                     time.sleep(TIME_SLEEP)
                     child.sendline("")
                     child.expect(r"\n\[ftp\]")
+                    soInMaster = True
                 if not stack["parcheInStack"]:
                     child.send(rf"get {parche_upgrade}")
                     time.sleep(TIME_SLEEP)
                     child.sendline("")
                     child.expect(r"\n\[ftp\]")
+                    parcheInMaster = True
 
                 child.send(r"quit")
                 time.sleep(TIME_SLEEP)
@@ -255,7 +260,7 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
             # SOLO COPIAR DE UN STACK A OTRO
             memberID = stack["MemberID"]
             if stack["sufficientCapacityInStack"]:
-                if not stack["soInStack"]:
+                if not stack["soInStack"] and soInMaster:
                     child.send(f"copy {so_upgrade} {memberID}#flash:")
                     time.sleep(TIME_SLEEP)
                     child.sendline("")
@@ -265,7 +270,7 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
                     child.sendline("")
                     child.expect(r"\s<[\w\-.]+>")
 
-                if not stack["parcheInStack"]:
+                if not stack["parcheInStack"] and parcheInMaster:
                     child.send(f"copy {parche_upgrade} {memberID}#flash:")
                     time.sleep(TIME_SLEEP)
                     child.sendline("")
@@ -274,6 +279,7 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
                     time.sleep(TIME_SLEEP)
                     child.sendline("")
                     child.expect(r"\s<[\w\-.]+>")
+    child.timeout = 60
 
     child.send(f"quit")
     time.sleep(TIME_SLEEP)
@@ -288,6 +294,8 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
     result["PingToFTP"] = f"ping {interface_ip}"
     result["soSizeInFTPInMB"] = soSizeInFTPInMegas
     result["parcheSizeInFTPInMB"] = parcheSizeInFTPInMegas
+    result["soInMaster"] = soInMaster
+    result["parcheInMaster"] = parcheInMaster
     result["stacks"] = result_stack
     return result
 
@@ -301,6 +309,3 @@ def routersFTPFromIPv4(list_ip, ftp_server):
 
 def master_isFirst(elemento):
     return 0 if elemento["Role"] == "Master" else 1
-
-# copy <archivo> n#flash:
-# [Y/N]:y

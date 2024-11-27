@@ -66,6 +66,8 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit, newbw):
     pe_protocol = None
     cpe_protocol = None
     acceso_protocol = None
+    peversion_found = None
+    accesoversion_found = None
 
     # OBTENER LA WAN DEL CID
     child.send(f"hh {cid} | grep -E \'\\b{cid}\\b\' | grep -E -o \'([0-9]{{1,3}}\.){{3}}[0-9]{{1,3}}\'")
@@ -140,6 +142,15 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit, newbw):
         pe_os = "huawei"
         pe_protocol = "ssh"
     
+    child.send(f"display version | no-more")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"\<.*\>")
+    output_peversion = child.before.decode("utf-8")
+    output_peversion_pattern = re.search(r"\n(?P<version>.*?)(?=\s+uptime)", output_peversion)
+    if output_peversion_pattern:
+        peversion_found = output_peversion_pattern.group("version")
+
     # OBTENER LA INTERFACE
     child.send(f"display ip routing-table {wan_found} | no-more")
     time.sleep(TIME_SLEEP)
@@ -407,6 +418,15 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit, newbw):
     child.sendline("")
     child.expect(r"\<\S+\>")
 
+    child.send(f"display version")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"\<.*\>")
+    output_accesoversion = child.before.decode("utf-8")
+    output_accesoversion_pattern = re.search(r"\n(?P<version>.*?)(?=\s+uptime)", output_accesoversion)
+    if output_accesoversion_pattern:
+        accesoversion_found = output_accesoversion_pattern.group("version")
+
     child.send(f"display mac-address | i {mac_found}")
     time.sleep(TIME_SLEEP)
     child.sendline("")
@@ -459,6 +479,7 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit, newbw):
             "pe_ipmascaraInSubInterface": pe_ipmascara_found,
             "pe_macOfCPE": mac_found,
             "pe_os": pe_os,
+            "pe_chassis": peversion_found,
             "pe_protocol": pe_protocol,
             "pe_trafficpoliceAnalisys": {
                 "pe_upgradeByMascara30": pe_ismascara30,
@@ -481,6 +502,7 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit, newbw):
             "acceso_interface": interface_cliente_found,
             "acceso_trafficpolicy": trafficpolicy_cliente_found,
             "acceso_os": acceso_os,
+            "acceso_chassis": accesoversion_found,
             "acceso_protocol": acceso_protocol,
             "acceso_trafficpoliceAnalisys": newTrafficpolicyInACCESO
         },

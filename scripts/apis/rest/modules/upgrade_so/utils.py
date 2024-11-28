@@ -8,15 +8,13 @@ import time
 # GLOBAL VARIABLES
 TIME_SLEEP = 0.1
 
-def to_router(list_ip_gestion, link, so_upgrade, parche_upgrade):
+def to_router(list_ip_gestion, link, so_upgrade, parche_upgrade, user_tacacs, pass_tacacs):
     load_dotenv(override=True)
     CYBERARK_USER = os.getenv("CYBERARK_USER")
     CYBERARK_PASS = os.getenv("CYBERARK_PASS")
     CYBERARK_IP = os.getenv("CYBERARK_IP")
     CRT_IP = os.getenv("CRT_IP")
     CRT_USER = os.getenv("CRT_USER")
-    user_tacacs = os.getenv("MINPUB_USER")
-    pass_tacacs = os.getenv("MINPUB_PASS")
     now = datetime.now().strftime("%Y%m%d%H%M%S")
     file_txt = f"media/upgrade_so/{now}.txt"
     url_txt = f"{link}/{file_txt}"
@@ -220,7 +218,6 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
             stack["sufficientCapacityInStack"] = None
 
     result_stack = sorted(result_stack, key=master_isFirst)
-    print(result_stack)
     child.timeout = 1800
     for stack in result_stack:
         if stack["Role"] == "Master":
@@ -244,13 +241,15 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
                     time.sleep(TIME_SLEEP)
                     child.sendline("")
                     child.expect(r"\n\[ftp\]")
-                    soInMaster = True
+                    
                 if not stack["parcheInStack"]:
                     child.send(rf"get {parche_upgrade}")
                     time.sleep(TIME_SLEEP)
                     child.sendline("")
                     child.expect(r"\n\[ftp\]")
-                    parcheInMaster = True
+                    
+                soInMaster = True
+                parcheInMaster = True
 
                 child.send(r"quit")
                 time.sleep(TIME_SLEEP)

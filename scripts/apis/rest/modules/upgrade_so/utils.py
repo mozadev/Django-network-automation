@@ -8,7 +8,7 @@ import time
 # GLOBAL VARIABLES
 TIME_SLEEP = 0.1
 
-def to_router(list_ip_gestion, link, so_upgrade, parche_upgrade, user_tacacs, pass_tacacs):
+def to_router(list_ip_gestion, link, so_upgrade, parche_upgrade, user_tacacs, pass_tacacs, download):
     load_dotenv(override=True)
     CYBERARK_USER = os.getenv("CYBERARK_USER")
     CYBERARK_PASS = os.getenv("CYBERARK_PASS")
@@ -34,7 +34,7 @@ def to_router(list_ip_gestion, link, so_upgrade, parche_upgrade, user_tacacs, pa
         for ip in list_ip_gestion:
             item = {}
             item["ip"] = ip
-            result.append(to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade))
+            result.append(to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade, download))
             time.sleep(5)
         child.send("exit")
         time.sleep(TIME_SLEEP)
@@ -43,10 +43,10 @@ def to_router(list_ip_gestion, link, so_upgrade, parche_upgrade, user_tacacs, pa
 
         return result
     except pexpect.ExceptionPexpect:
-        return {"msg": "ERROR"}
+        return {"msg": "ERROR, LA API DE DETUVO"}
 
 
-def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
+def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade, download):
     result = {}
     version = None
     vlanif199 = False
@@ -63,7 +63,9 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
     child.send(f"telnet {ip}")
     time.sleep(TIME_SLEEP)
     child.sendline("")
-    child.expect("[Uu]sername:")
+    item_input = child.expect([r"[Uu]sername:", r"\]\$"])
+    if item_input == 1:
+        return {"msg": rf"SWITCH IPv4OfStack {ip} sin gestión"}
     child.send(user_tacacs)
     time.sleep(TIME_SLEEP)
     child.sendline("")
@@ -71,10 +73,7 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
     child.send(pass_tacacs)
     time.sleep(TIME_SLEEP)
     child.sendline("")
-
-    prompt_server = child.expect([r"\s<[\w\-.]+>", r"\]\$"])
-    if prompt_server == 1:
-        return result
+    child.expect(r"\s<[\w\-.]+>")
 
     child.send(f"screen-length 0 temporary")
     time.sleep(TIME_SLEEP)
@@ -188,10 +187,14 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
         
         if output_soInStack_pattern:
             stack["soInStack"] = True
+            if stack["Role"] == "Master":
+                soInMaster = True
         else:
             stack["soInStack"] = False
         if output_parcheInStack_pattern:
             stack["parcheInStack"]  = True
+            if stack["Role"] == "Master":
+                parcheInMaster = True
         else:
             stack["parcheInStack"]  = False
         if output_sizeInStack_pattern:
@@ -199,12 +202,22 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
             stack["sizeFreeInStack"]  = round(int(re.sub(",", "", sizeFreeInStack)) / 1024, 2)
         else:
             stack["sizeFreeInStack"] = None
+
         listSOInStack = []
         listParcheInStack = []
+        stack["soIsCompletedInStack"] = False
+        stack["parcheIsCompletedInStack"] = False
+
         for so_item in listSOInStack_pattern:
-            listSOInStack.append({"sizeSOInMB": round(int(re.sub(",", "", so_item[0])) / (1024 * 1024), 2), "nameSO": so_item[1]})
+            soInMegas = round(int(re.sub(",", "", so_item[0])) / (1024 * 1024), 2)
+            listSOInStack.append({"sizeSOInMB": soInMegas, "nameSO": so_item[1]})
+            if so_item[1] == so_upgrade and soInMegas == soSizeInFTPInMegas:
+                stack["soIsCompletedInStack"] = True
         for parche_item in listParcheInStack_pattern:
-            listParcheInStack.append({"sizeParcheInMB": round(int(re.sub(",", "", parche_item[0])) / (1024 * 1024), 2), "nameParche": parche_item[1]})
+            parcheInMegas = round(int(re.sub(",", "", parche_item[0])) / (1024 * 1024), 2)
+            listParcheInStack.append({"sizeParcheInMB": parcheInMegas, "nameParche": parche_item[1]})
+            if parche_item[1] == parche_upgrade and parcheInMegas == parcheSizeInFTPInMegas:
+                stack["parcheIsCompletedInStack"] = True
 
         stack["listSOInStack"] = listSOInStack
         stack["listParcheInStack"] = listParcheInStack
@@ -218,7 +231,7 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
             stack["sufficientCapacityInStack"] = None
 
     result_stack = sorted(result_stack, key=master_isFirst)
-    child.timeout = 1800
+    child.timeout = 3600
     for stack in result_stack:
         if stack["Role"] == "Master":
             # IR AL SERVIDOR FTP
@@ -236,20 +249,19 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
                 child.sendline("")
                 child.expect(r"\n\[ftp\]")
 
-                if not stack["soInStack"]:
+                if not stack["soInStack"] and download == "Y":
                     child.send(rf"get {so_upgrade}")
                     time.sleep(TIME_SLEEP)
                     child.sendline("")
                     child.expect(r"\n\[ftp\]")
+                    soInMaster = True
                     
-                if not stack["parcheInStack"]:
+                if not stack["parcheInStack"] and download == "Y":
                     child.send(rf"get {parche_upgrade}")
                     time.sleep(TIME_SLEEP)
                     child.sendline("")
                     child.expect(r"\n\[ftp\]")
-                    
-                soInMaster = True
-                parcheInMaster = True
+                    parcheInMaster = True
 
                 child.send(r"quit")
                 time.sleep(TIME_SLEEP)
@@ -259,7 +271,7 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
             # SOLO COPIAR DE UN STACK A OTRO
             memberID = stack["MemberID"]
             if stack["sufficientCapacityInStack"]:
-                if not stack["soInStack"] and soInMaster:
+                if not stack["soInStack"] and soInMaster and download == "Y":
                     child.send(f"copy {so_upgrade} {memberID}#flash:")
                     time.sleep(TIME_SLEEP)
                     child.sendline("")
@@ -269,7 +281,7 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
                     child.sendline("")
                     child.expect(r"\s<[\w\-.]+>")
 
-                if not stack["parcheInStack"] and parcheInMaster:
+                if not stack["parcheInStack"] and parcheInMaster and download == "Y":
                     child.send(f"copy {parche_upgrade} {memberID}#flash:")
                     time.sleep(TIME_SLEEP)
                     child.sendline("")
@@ -286,9 +298,11 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade):
     child.expect(r"\]\$")
 
     result["IPv4OfStack"] = ip
+    result["newSOSearchedInFTPServer"] = so_upgrade
+    result["newParcheSearchedInFTPServer"] = parche_upgrade
     result["countStacks"] = len(result_stack)
-    result["versionSwitch"] = version
-    result["versionByStack"] = result_startup
+    result["versionSwitchNow"] = version
+    result["versionByStackNow"] = result_startup
     result["Vlanif199_isFound"] = vlanif199
     result["PingToFTP"] = f"ping {interface_ip}"
     result["soSizeInFTPInMB"] = soSizeInFTPInMegas

@@ -83,8 +83,9 @@ class UpgradeSOHuaweiSwitchSerializer(serializers.Serializer):
     user_tacacs = serializers.CharField(required=True, label="Usuario SWITCH")
     pass_tacacs = serializers.CharField(style={'input_type': 'password'}, label="Password SWITCH")
     ip_switch = serializers.CharField(required=True, label="IPv4 del SWITCH", help_text="Ingresar las IPv4 separados por un Enter", max_length=1000, style={"base_template": "textarea.html", "rows": 3})
-    so_upgrade = serializers.CharField(required=True, label="Nuevo Sistema Operativo Huawei")
-    parche_upgrade = serializers.CharField(required=True, label="Nuevo Parche del Sistema Operativo Huawei")
+    so_upgrade = serializers.CharField(required=True, label="Nuevo Sistema Operativo Huawei", help_text="Ejemplo: testing.cc")
+    parche_upgrade = serializers.CharField(required=True, label="Nuevo Parche del Sistema Operativo Huawei", help_text="Ejemplo: testing.pat")
+    download = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Descargar los ficheros?")
 
 
 class UploadCorreosTicketsSerializer(serializers.Serializer):

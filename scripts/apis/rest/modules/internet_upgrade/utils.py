@@ -9,7 +9,7 @@ import re
 TIME_SLEEP = 0.1
 
 
-def to_server(user_tacacs, pass_tacacs, cid_list, ip_owner, commit, newbw):
+def to_server(user_tacacs, pass_tacacs, cid_list, ip_owner, commit_pe, commit_acceso, newbw):
     load_dotenv(override=True)
     CYBERARK_USER = os.getenv("CYBERARK_USER")
     CYBERARK_PASS = os.getenv("CYBERARK_PASS")
@@ -34,7 +34,7 @@ def to_server(user_tacacs, pass_tacacs, cid_list, ip_owner, commit, newbw):
         child.expect(r"\]\$")
         for cid in cid_list:
             item = {}
-            item["msg"], item["status"] = to_router(child, user_tacacs, pass_tacacs, cid, commit, newbw)
+            item["msg"], item["status"] = to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, newbw)
             result.append(item)
             time.sleep(5)
         child.send("exit")
@@ -47,7 +47,7 @@ def to_server(user_tacacs, pass_tacacs, cid_list, ip_owner, commit, newbw):
     return result
 
 
-def to_router(child, user_tacacs, pass_tacacs, cid, commit, newbw):
+def to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, newbw):
     wan_found = None
     ippe_found = None
     pesubinterface_found = None
@@ -215,7 +215,7 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit, newbw):
     # DIVIDIR ESCENARIOS DEPENDIENDO DE LA MASCARA
     pe_ismascara30 = is_mascara30(pe_ipmascara_found["mascara"])
     if pe_ismascara30:
-        newTrafficpolicyInPE  = search_newbw_inPE(child, trafficpolicy_found, newbw, pesubinterface_found, commit)
+        newTrafficpolicyInPE  = search_newbw_inPE(child, trafficpolicy_found, newbw, pesubinterface_found, commit_pe)
 
     
     # OBTENER LA MAC DE LA WAN EN EL PE
@@ -457,7 +457,7 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit, newbw):
     if len(trafficpolicy_cliente_pattern) > 0:
         trafficpolicy_cliente_found = trafficpolicy_cliente_pattern
 
-    newTrafficpolicyInACCESO = search_newbw_inACCESO(child, trafficpolicy_cliente_found, newbw, interface_cliente_found, commit)
+    newTrafficpolicyInACCESO = search_newbw_inACCESO(child, trafficpolicy_cliente_found, newbw, interface_cliente_found, commit_acceso)
 
     child.send(f"quit")
     time.sleep(TIME_SLEEP)
@@ -468,7 +468,8 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit, newbw):
 
     result = {
         "cid": cid,
-        "commit": commit,
+        "commit_pe": commit_pe,
+        "commit_acceso": commit_acceso,
         "newBWinMegas": newbw,
         "wan_ofInternet": wan_found,
         "pe_device": {
@@ -523,7 +524,7 @@ def cpe_huawei(child):
     return
 
 
-def search_newbw_inPE(child = None, trafficpolicy = None, newbw = None, subinterface=None, commit = "N"):
+def search_newbw_inPE(child = None, trafficpolicy = None, newbw = None, subinterface=None, commit_pe = "N"):
     result = {}
 
     if trafficpolicy:
@@ -645,7 +646,7 @@ def search_newbw_inPE(child = None, trafficpolicy = None, newbw = None, subinter
             result["new_trafficpolicy_out_iscreated"],
         )
 
-        # result["session_inPE"] = configuration_inHuawei(child, result["new_trafficpolicy_commands"], commit)
+        result["session_inPE"] = configuration_inHuawei(child, result["new_trafficpolicy_commands"], commit_pe)
 
         return result
     else:
@@ -749,7 +750,7 @@ def trafficpolicy_configurationInPE(trafficpolicy_in, trafficpolicy_out, bw, cla
     return result
 
 
-def search_newbw_inACCESO(child=None, trafficpolicy = None, newbw = None, subinterface=None, commit="N"):
+def search_newbw_inACCESO(child=None, trafficpolicy = None, newbw = None, subinterface=None, commit_acceso="N"):
     result = {}
     byInterfaceIn = False
     byInterfaceOut = False
@@ -821,8 +822,9 @@ def search_newbw_inACCESO(child=None, trafficpolicy = None, newbw = None, subint
         output_behavior_pattern_in = re.search(r'classifier \S+ behavior ([\w\-.]+)', output_behavior_in)
         if output_behavior_pattern_in:
             behavior_in_newNow = output_behavior_pattern_in.group(1)
-            
-            child.send(f"display curr configuration behavior {behavior_in_newNow}")
+        # Es en traffic-policy con nomenclatura diferente a interface
+        if behavior_in_newNow != behavior_in_new: 
+            child.send(f"display curr configuration behavior {behavior_in_new}")
             time.sleep(TIME_SLEEP)
             child.sendline("")
             child.expect(r"<[\w\-.]+>")
@@ -844,8 +846,8 @@ def search_newbw_inACCESO(child=None, trafficpolicy = None, newbw = None, subint
         output_behavior_pattern_out = re.search(r'classifier \S+ behavior ([\w\-.]+)', output_behavior_out)
         if output_behavior_pattern_out:
             behavior_out_newNow = output_behavior_pattern_out.group(1)
-
-            child.send(f"display curr configuration behavior {behavior_out_newNow}")
+        if behavior_out_newNow != behavior_out_new: 
+            child.send(f"display curr configuration behavior {behavior_out_new}")
             time.sleep(TIME_SLEEP)
             child.sendline("")
             child.expect(r"<[\w\-.]+>")
@@ -901,12 +903,12 @@ def search_newbw_inACCESO(child=None, trafficpolicy = None, newbw = None, subint
         result["new_trafficpolicy_out_iscreated"] = new_trafficpolicy_out_iscreated
         result["new_behavior_in_newNow"] = behavior_in_newNow
         result["new_behavior_out_newNow"] = behavior_out_newNow
-        result["carcir_in_newNow"] = carcir_in_newNow
-        result["carcir_out_newNow"] = carcir_out_newNow
+        result["new_behavior_in_found"] = carcir_in_newNow
+        result["new_behavior_out_found"] = carcir_out_newNow
         result["numberOfPolicytraffic"] = trafficpolicyAll
         result["addNewPolicyTraffic"] = addNewPolicyTraffic
         result["new_trafficpolicy_commands"] = trafficpolicy_configurationInACCESO(**values_for_commands)
-        # result["session_inACCESO"] = configuration_inHuawei(child, [], commit)
+        result["session_inACCESO"] = configuration_inHuawei(child, [], commit_acceso) if commit_acceso == "N" else configuration_inHuawei(child, result["new_trafficpolicy_commands"], commit_acceso)
         return result
     else:
         return None
@@ -915,10 +917,7 @@ def search_newbw_inACCESO(child=None, trafficpolicy = None, newbw = None, subint
 
 def trafficpolicy_configurationInACCESO(**kwargs):
     result = []
-
-    if not kwargs["addNewPolicyTraffic"]:
-        return result
-
+    # IN
     if not kwargs["carcir_in_newNow"]:
         result.extend(
             [
@@ -929,7 +928,7 @@ def trafficpolicy_configurationInACCESO(**kwargs):
                 " quit",
             ]
         )
-
+    # OUT
     if not kwargs["carcir_out_newNow"]:
         result.extend(
             [
@@ -941,23 +940,63 @@ def trafficpolicy_configurationInACCESO(**kwargs):
             ]
         )
 
-    if not kwargs["new_trafficpolicy_in_iscreated"] or not kwargs["carcir_in_newNow"]:
-        result.extend(
-            [
-                "traffic policy {trafficpolice}".format(trafficpolice=kwargs["new_trafficpolicy_in"]),
-                " classifier {classifier} behavior {behavior}".format(classifier=kwargs["old_classifier_in"], behavior=kwargs["new_behavior_in"]),
-                " quit",
-            ]
-        )
+    # IN
+    if kwargs["addNewPolicyTraffic"]:
+        if not kwargs["new_trafficpolicy_in_iscreated"]:
+            result.extend(
+                [
+                    "traffic policy {trafficpolice}".format(trafficpolice=kwargs["new_trafficpolicy_in"]),
+                    " classifier {classifier} behavior {behavior}".format(classifier=kwargs["old_classifier_in"], behavior=kwargs["new_behavior_in"]),
+                    " quit",
+                ]
+            )
+        else:
+            if kwargs["old_trafficpoliceByInterface_in"]:
+                result.extend(
+                    [
+                        "traffic policy {trafficpolice}".format(trafficpolice=kwargs["new_trafficpolicy_in"]),
+                        " classifier {classifier} behavior {behavior}".format(classifier=kwargs["old_classifier_in"], behavior=kwargs["new_behavior_in"]),
+                        " quit",
+                    ]
+                )
+    else:
+        if kwargs["old_trafficpoliceByInterface_in"]:
+            result.extend(
+                [
+                    "traffic policy {trafficpolice}".format(trafficpolice=kwargs["new_trafficpolicy_in"]),
+                    " classifier {classifier} behavior {behavior}".format(classifier=kwargs["old_classifier_in"], behavior=kwargs["new_behavior_in"]),
+                    " quit",
+                ]
+            )
 
-    if not kwargs["new_trafficpolicy_out_iscreated"] or not kwargs["carcir_out_newNow"]:
-        result.extend(
-            [
-                "traffic policy {trafficpolice}".format(trafficpolice=kwargs["new_trafficpolicy_out"]),
-                " classifier {classifier} behavior {behavior}".format(classifier=kwargs["old_classifier_out"], behavior=kwargs["new_behavior_out"]),
-                " quit",
-            ]
-        )
+    # OUT
+    if kwargs["addNewPolicyTraffic"]:
+        if not kwargs["new_trafficpolicy_out_iscreated"]:
+            result.extend(
+                [
+                    "traffic policy {trafficpolice}".format(trafficpolice=kwargs["new_trafficpolicy_out"]),
+                    " classifier {classifier} behavior {behavior}".format(classifier=kwargs["old_classifier_out"], behavior=kwargs["new_behavior_out"]),
+                    " quit",
+                ]
+            )
+        else:
+            if kwargs["old_trafficpoliceByInterface_out"]:
+                result.extend(
+                    [
+                        "traffic policy {trafficpolice}".format(trafficpolice=kwargs["new_trafficpolicy_out"]),
+                        " classifier {classifier} behavior {behavior}".format(classifier=kwargs["old_classifier_out"], behavior=kwargs["new_behavior_out"]),
+                        " quit",
+                    ]
+                )
+    else:
+        if kwargs["old_trafficpoliceByInterface_out"]:
+            result.extend(
+                [
+                    "traffic policy {trafficpolice}".format(trafficpolice=kwargs["new_trafficpolicy_out"]),
+                    " classifier {classifier} behavior {behavior}".format(classifier=kwargs["old_classifier_out"], behavior=kwargs["new_behavior_out"]),
+                    " quit",
+                ]
+            )
 
     result.extend(
         [

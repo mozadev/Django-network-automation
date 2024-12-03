@@ -526,7 +526,7 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, co
             "cpe_protocol": cpe_protocol,
             "cpe_trafficpolicyAnalysis": {
                 "new_trafficpolicy_commands": cpe_commands,
-                "cpe_session": cpe_session,
+                "session_inCPE": cpe_session,
             },
         },
         "acceso_device": {
@@ -1084,3 +1084,5 @@ def configuration_inCisco(child, commands):
     result = "".join(result)
     result = result.split("\r\n")
     return result
+
+

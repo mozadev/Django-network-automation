@@ -325,10 +325,12 @@ class InternetUpgrade(viewsets.ViewSet):
             pass_tacacs = serializer.validated_data["pass_tacacs"]
             commit_pe = serializer.validated_data["commit_pe"]
             commit_acceso = serializer.validated_data["commit_acceso"]
+            commit_cpe = serializer.validated_data["commit_cpe"]
             cid = serializer.validated_data["cid"]
             newbw = serializer.validated_data["newbw"]
+
             cid_list = cid.replace("\n", "").split("\r")
-            result = internet_upgrade.to_server(user_tacacs, pass_tacacs, cid_list, "xd", commit_pe, commit_acceso, newbw)
+            result = internet_upgrade.to_server(user_tacacs, pass_tacacs, cid_list, "xd", commit_pe, commit_acceso, commit_cpe, newbw)
             return Response(result, status=status.HTTP_200_OK)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

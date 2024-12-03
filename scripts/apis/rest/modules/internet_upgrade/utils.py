@@ -9,7 +9,7 @@ import re
 TIME_SLEEP = 0.1
 
 
-def to_server(user_tacacs, pass_tacacs, cid_list, ip_owner, commit_pe, commit_acceso, newbw):
+def to_server(user_tacacs, pass_tacacs, cid_list, ip_owner, commit_pe, commit_acceso, commit_cpe, newbw):
     load_dotenv(override=True)
     CYBERARK_USER = os.getenv("CYBERARK_USER")
     CYBERARK_PASS = os.getenv("CYBERARK_PASS")
@@ -34,7 +34,7 @@ def to_server(user_tacacs, pass_tacacs, cid_list, ip_owner, commit_pe, commit_ac
         child.expect(r"\]\$")
         for cid in cid_list:
             item = {}
-            item["msg"], item["status"] = to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, newbw)
+            item["msg"], item["status"] = to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, commit_cpe, newbw)
             result.append(item)
             time.sleep(5)
         child.send("exit")
@@ -47,7 +47,7 @@ def to_server(user_tacacs, pass_tacacs, cid_list, ip_owner, commit_pe, commit_ac
     return result
 
 
-def to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, newbw):
+def to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, commit_cpe, newbw):
     wan_found = None
     ippe_found = None
     pesubinterface_found = None
@@ -68,6 +68,10 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, ne
     acceso_protocol = None
     peversion_found = None
     accesoversion_found = None
+    cpeversion_found = None
+    cpe_hostname_found = None
+    cpe_commands = None
+    cpe_session = None
 
     # OBTENER LA WAN DEL CID
     child.send(f"hh {cid} | grep -E \'\\b{cid}\\b\' | grep -E -o \'([0-9]{{1,3}}\.){{3}}[0-9]{{1,3}}\'")
@@ -290,6 +294,24 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, ne
                 child.sendline("")
                 child.expect(r"\S+\#")
 
+                child.send(f"show version")
+                time.sleep(TIME_SLEEP)
+                child.sendline("")
+                child.expect(r"\S+\#")
+                output_cpe_version = child.before.decode("utf-8")
+                cpe_version_pattern = re.search(r"\n(?P<version>.*)(?=\s+processor with)", output_cpe_version)
+                if cpe_version_pattern:
+                    cpeversion_found = cpe_version_pattern.group("version")
+
+                child.send(f"show run | include hostname")
+                time.sleep(TIME_SLEEP)
+                child.sendline("")
+                child.expect(r"\S+\#")
+                output_cpe_hostname = child.before.decode("utf-8")
+                cpe_hostname_pattern = re.search(r"\nhostname\s+(?P<hostname>\S+)", output_cpe_hostname)
+                if cpe_hostname_pattern:
+                    cpe_hostname_found = cpe_hostname_pattern.group("hostname")
+
                 child.send(f"sh ip int brief")
                 time.sleep(TIME_SLEEP)
                 child.sendline("")
@@ -319,7 +341,14 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, ne
                 output_trafficpolicy_cpe = child.before.decode("utf-8")
                 trafficpolicy_cpe_pattern = re.search(rf'bandwidth (\d+)', output_trafficpolicy_cpe)
                 if trafficpolicy_cpe_pattern:
-                    trafficpolicy_cpe_found = trafficpolicy_cpe_pattern.group(1)
+                    trafficpolicy_cpe_found = int(trafficpolicy_cpe_pattern.group(1))
+                
+                values_for_cpe_commands = {
+                    "interface": interface_cpe_found,
+                    "new_bandwidth": newbw * 1024,
+                }
+                cpe_commands = trafficpolicy_configurationInCPE(**values_for_cpe_commands)
+                cpe_session = configuration_inCisco(child, cpe_commands) if commit_cpe == "Y" else configuration_inCisco(child, [])
 
                 child.send("exit")
                 time.sleep(TIME_SLEEP)
@@ -482,20 +511,22 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, ne
             "pe_os": pe_os,
             "pe_chassis": peversion_found,
             "pe_protocol": pe_protocol,
-            "pe_trafficpoliceAnalisys": {
+            "pe_trafficpoliceAnalysis": {
                 "pe_upgradeByMascara30": pe_ismascara30,
                 "pe_trafficpolicyDetail": newTrafficpolicyInPE if pe_ismascara30 else None,
             },
         },
         "cpe_device": {
             "cpe": wan_found,
+            "cpe_hostname": cpe_hostname_found,
             "cpe_interface": interface_cpe_found,
-            "cpe_trafficpolicy": trafficpolicy_cpe_found,
+            "cpe_bandwith_now": trafficpolicy_cpe_found,
             "cpe_os": cpe_os,
+            "cpe_chassis": cpeversion_found,
             "cpe_protocol": cpe_protocol,
-            "cpe_analisis": {
-                "cpe_upgrade": None,
-                "cpe_commands": None,
+            "cpe_trafficpolicyAnalysis": {
+                "new_trafficpolicy_commands": cpe_commands,
+                "cpe_session": cpe_session,
             },
         },
         "acceso_device": {
@@ -505,7 +536,7 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, ne
             "acceso_os": acceso_os,
             "acceso_chassis": accesoversion_found,
             "acceso_protocol": acceso_protocol,
-            "acceso_trafficpoliceAnalisys": newTrafficpolicyInACCESO
+            "acceso_trafficpoliceAnalysis": newTrafficpolicyInACCESO
         },
     }
 
@@ -518,10 +549,6 @@ def is_mascara30(mascara):
         return True
     else:
         return False
-    
-
-def cpe_huawei(child):
-    return
 
 
 def search_newbw_inPE(child = None, trafficpolicy = None, newbw = None, subinterface=None, commit_pe = "N"):
@@ -1006,7 +1033,54 @@ def trafficpolicy_configurationInACCESO(**kwargs):
             " traffic-policy {trafficpolicy_in} inbound".format(trafficpolicy_in=kwargs["new_trafficpolicy_in"]),
             " traffic-policy {trafficpolicy_out} outbound".format(trafficpolicy_out=kwargs["new_trafficpolicy_out"]),
             " quit",
+            "save",
         ]
     ) 
 
+    return result
+
+
+def trafficpolicy_configurationInCPE(**kwargs):
+    interface = kwargs["interface"]
+    bandwidth = kwargs["new_bandwidth"]
+    result = []
+    result.extend(
+        [
+            f"interface {interface}",
+            f" bandwidth {bandwidth}",
+            f" exit",
+            f"wr",
+        ]
+    )
+    return result
+
+def configuration_inCisco(child, commands):
+    result = []
+    prompt = child.after.decode("utf-8")
+    child.send(f"configure terminal")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"\S+\#")
+    comando = child.before.decode("utf-8")
+    result.append(prompt + comando)
+
+    for command in commands:
+        prompt = child.after.decode("utf-8")
+        child.send(command)
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\S+\#")
+        comando = child.before.decode("utf-8")
+        result.append(prompt + comando)
+
+    prompt = child.after.decode("utf-8")
+    child.send("exit")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"\S+\#")
+    comando = child.before.decode("utf-8")
+    result.append(prompt + comando)
+    
+    result = "".join(result)
+    result = result.split("\r\n")
     return result

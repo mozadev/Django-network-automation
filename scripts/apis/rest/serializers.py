@@ -70,6 +70,7 @@ class InternetUpgradeSerializer(serializers.Serializer):
     newbw = serializers.IntegerField(required=True, min_value=0, label="Nuevo Ancho de Banda (Mbps)")
     commit_pe = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear los cambios en el PE?")
     commit_acceso = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear los cambios en el ACCESO?")
+    commit_cpe = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear los cambios en el CPE?")
 
 
 class InterfacesStatusHuaweiSerializer(serializers.Serializer):

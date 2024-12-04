@@ -72,6 +72,10 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, co
     cpe_hostname_found = None
     cpe_commands = None
     cpe_session = None
+    output_commands_cpe = []
+    output_commands_acceso = []
+    output_commands_pe = []
+    description_cpe_found = None
 
     # OBTENER LA WAN DEL CID
     child.send(f"hh {cid} | grep -E \'\\b{cid}\\b\' | grep -E -o \'([0-9]{{1,3}}\.){{3}}[0-9]{{1,3}}\'")
@@ -332,24 +336,30 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, co
                     child.expect(r"\]\$")
 
                     return f"CPE: INTERFACE DEL ACCESO CISCO {wan_found} NO ENCONTRADO del CID {cid} no encontrado", 400
-            
+                cpe_prompt = child.after.decode("utf-8")
                 child.send(f"sh run int {interface_cpe_found}")
                 time.sleep(TIME_SLEEP)
                 child.sendline("")
                 child.expect(r"\S+\#")
 
                 output_trafficpolicy_cpe = child.before.decode("utf-8")
+                output_commands_cpe.extend((cpe_prompt + output_trafficpolicy_cpe).split("\r\n"))
                 trafficpolicy_cpe_pattern = re.search(rf'bandwidth (\d+)', output_trafficpolicy_cpe)
                 if trafficpolicy_cpe_pattern:
                     trafficpolicy_cpe_found = int(trafficpolicy_cpe_pattern.group(1))
-                
+
+                #description_cpe_pattern = re.search(r"description (?P<description>.*)(?=\r\n)", output_trafficpolicy_cpe)
+                #if description_cpe_pattern:
+                #    description_cpe_found = int(description_cpe_pattern.group("description"))
+
+
                 values_for_cpe_commands = {
                     "interface": interface_cpe_found,
                     "new_bandwidth": newbw * 1024,
                 }
                 cpe_commands = trafficpolicy_configurationInCPE(**values_for_cpe_commands)
-                cpe_session = configuration_inCisco(child, cpe_commands) if commit_cpe == "Y" else configuration_inCisco(child, [])
-
+                cpe_session = configuration_inCisco(child, cpe_commands, commit_cpe) if commit_cpe == "Y" else configuration_inCisco(child, [], commit_cpe)
+                
                 child.send("exit")
                 time.sleep(TIME_SLEEP)
                 child.sendline("")
@@ -477,11 +487,13 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, co
         pass
     else:
         interface_cliente_found = interface_cliente_found.replace("GE", "Gi")
+    prompt_acceso = child.after.decode("utf-8")
     child.send(f"display curr int {interface_cliente_found}")
     time.sleep(TIME_SLEEP)
     child.sendline("")
     child.expect(r"\<\S+\>")
     output_trafficpolicy_cliente = child.before.decode("utf-8")
+    output_commands_acceso.extend((prompt_acceso + output_trafficpolicy_cliente).split("\r\n"))
     trafficpolicy_cliente_pattern = re.findall(r'traffic-policy (\S+) (\S+)', output_trafficpolicy_cliente)
     if len(trafficpolicy_cliente_pattern) > 0:
         trafficpolicy_cliente_found = trafficpolicy_cliente_pattern
@@ -521,6 +533,7 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, co
             "cpe_hostname": cpe_hostname_found,
             "cpe_interface": interface_cpe_found,
             "cpe_bandwith_now": trafficpolicy_cpe_found,
+            "cpe_description_now": description_cpe_found,
             "cpe_os": cpe_os,
             "cpe_chassis": cpeversion_found,
             "cpe_protocol": cpe_protocol,
@@ -528,6 +541,7 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, co
                 "new_trafficpolicy_commands": cpe_commands,
                 "session_inCPE": cpe_session,
             },
+            "cpe_commandsSumary": output_commands_cpe,
         },
         "acceso_device": {
             "acceso": lldp_found,
@@ -536,7 +550,8 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, co
             "acceso_os": acceso_os,
             "acceso_chassis": accesoversion_found,
             "acceso_protocol": acceso_protocol,
-            "acceso_trafficpoliceAnalysis": newTrafficpolicyInACCESO
+            "acceso_trafficpoliceAnalysis": newTrafficpolicyInACCESO,
+            "acceso_commandsSumary": output_commands_acceso,
         },
     }
 
@@ -680,7 +695,7 @@ def search_newbw_inPE(child = None, trafficpolicy = None, newbw = None, subinter
         return None
     
 
-def configuration_inHuawei(child, commands, commit):
+def configuration_inHuawei(child, commands, commit, isACCESO=False):
     result = []
     prompt = child.after.decode("utf-8")
     child.send(f"system-view")
@@ -706,6 +721,7 @@ def configuration_inHuawei(child, commands, commit):
     index = child.expect([r"\[Y\(yes\)\/N\(no\)\/C\(cancel\)\]:", r"<[\w\-.]+>"])
     comando = child.before.decode("utf-8")
     result.append(prompt + comando)
+
     prompt = child.after.decode("utf-8")
     if index == 0:
         child.send(commit)
@@ -716,6 +732,24 @@ def configuration_inHuawei(child, commands, commit):
     child.expect(r"<[\w\-.]+>")
     comando = child.before.decode("utf-8")
     result.append(prompt + comando)
+
+    if isACCESO and commit == "Y":
+        prompt = child.after.decode("utf-8")
+        child.send("save")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\[Y\/N\]")
+        comando = child.before.decode("utf-8")
+        result.append(prompt + comando)
+
+        prompt = child.after.decode("utf-8")
+        child.send("Y")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"<[\w\-.]+>")
+        comando = child.before.decode("utf-8")
+        result.append(prompt + comando)
+
     prompt = child.after.decode("utf-8")
     child.send(" ")
     time.sleep(TIME_SLEEP)
@@ -935,7 +969,7 @@ def search_newbw_inACCESO(child=None, trafficpolicy = None, newbw = None, subint
         result["numberOfPolicytraffic"] = trafficpolicyAll
         result["addNewPolicyTraffic"] = addNewPolicyTraffic
         result["new_trafficpolicy_commands"] = trafficpolicy_configurationInACCESO(**values_for_commands)
-        result["session_inACCESO"] = configuration_inHuawei(child, [], commit_acceso) if commit_acceso == "N" else configuration_inHuawei(child, result["new_trafficpolicy_commands"], commit_acceso)
+        result["session_inACCESO"] = configuration_inHuawei(child, [], commit_acceso, isACCESO=True) if commit_acceso == "N" else configuration_inHuawei(child, result["new_trafficpolicy_commands"], commit_acceso, isACCESO=True)
         return result
     else:
         return None
@@ -1033,7 +1067,6 @@ def trafficpolicy_configurationInACCESO(**kwargs):
             " traffic-policy {trafficpolicy_in} inbound".format(trafficpolicy_in=kwargs["new_trafficpolicy_in"]),
             " traffic-policy {trafficpolicy_out} outbound".format(trafficpolicy_out=kwargs["new_trafficpolicy_out"]),
             " quit",
-            "save",
         ]
     ) 
 
@@ -1049,12 +1082,11 @@ def trafficpolicy_configurationInCPE(**kwargs):
             f"interface {interface}",
             f" bandwidth {bandwidth}",
             f" exit",
-            f"wr",
         ]
     )
     return result
 
-def configuration_inCisco(child, commands):
+def configuration_inCisco(child, commands, commit):
     result = []
     prompt = child.after.decode("utf-8")
     child.send(f"configure terminal")
@@ -1080,6 +1112,15 @@ def configuration_inCisco(child, commands):
     child.expect(r"\S+\#")
     comando = child.before.decode("utf-8")
     result.append(prompt + comando)
+
+    if commit == "Y":
+        prompt = child.after.decode("utf-8")
+        child.send("wr")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\S+\#")
+        comando = child.before.decode("utf-8")
+        result.append(prompt + comando)
     
     result = "".join(result)
     result = result.split("\r\n")

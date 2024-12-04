@@ -498,7 +498,7 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, co
     if len(trafficpolicy_cliente_pattern) > 0:
         trafficpolicy_cliente_found = trafficpolicy_cliente_pattern
 
-    newTrafficpolicyInACCESO = search_newbw_inACCESO(child, trafficpolicy_cliente_found, newbw, interface_cliente_found, commit_acceso)
+    newTrafficpolicyInACCESO, output_commands_acceso = search_newbw_inACCESO(child, trafficpolicy_cliente_found, newbw, interface_cliente_found, commit_acceso, output_commands_acceso)
 
     child.send(f"quit")
     time.sleep(TIME_SLEEP)
@@ -811,7 +811,7 @@ def trafficpolicy_configurationInPE(trafficpolicy_in, trafficpolicy_out, bw, cla
     return result
 
 
-def search_newbw_inACCESO(child=None, trafficpolicy = None, newbw = None, subinterface=None, commit_acceso="N"):
+def search_newbw_inACCESO(child=None, trafficpolicy = None, newbw = None, subinterface=None, commit_acceso="N", output_commands=[]):
     result = {}
     byInterfaceIn = False
     byInterfaceOut = False
@@ -827,21 +827,27 @@ def search_newbw_inACCESO(child=None, trafficpolicy = None, newbw = None, subint
 
         # OLD
         # IN OLD
+        prompt = child.after.decode("utf-8")
         child.send(f"display curr configuration trafficpolicy {old_trafficpolicy_inMbps}")
         time.sleep(TIME_SLEEP)
         child.sendline("")
         child.expect(r"<[\w\-.]+>")
         output_trafficpolicy_in_old = child.before.decode("utf-8")
+        output_commands.extend((prompt + output_trafficpolicy_in_old).split("\r\n"))
+
         output_classifier_behavior_in_old_pattern = re.search(r'classifier (\w+) behavior (\w+)', output_trafficpolicy_in_old)
         classifier_in_old = output_classifier_behavior_in_old_pattern.group(1)
         behavior_in_old = output_classifier_behavior_in_old_pattern.group(2)
 
         # OUT OLD
+        prompt = child.after.decode("utf-8")
         child.send(f"display curr configuration trafficpolicy {old_trafficpolicy_outMbps}")
         time.sleep(TIME_SLEEP)
         child.sendline("")
         child.expect(r"<[\w\-.]+>")
         output_trafficpolicy_out_old = child.before.decode("utf-8")
+        output_commands.extend((prompt + output_trafficpolicy_out_old).split("\r\n"))
+
         output_classifier_behavior_out_old_pattern = re.search(r'classifier (\w+) behavior (\w+)', output_trafficpolicy_out_old)
         classifier_out_old = output_classifier_behavior_out_old_pattern.group(1)
         behavior_out_old = output_classifier_behavior_out_old_pattern.group(2)
@@ -871,11 +877,14 @@ def search_newbw_inACCESO(child=None, trafficpolicy = None, newbw = None, subint
         behavior_out_new = re.sub("\d+", f"{newbw_outKbps}", behavior_out_old)
 
         # IN NEW
+        prompt = child.after.decode("utf-8")
         child.send(f"display curr configuration trafficpolicy {trafficpolicy_in_new}")
         time.sleep(TIME_SLEEP)
         child.sendline("")
         child.expect(r"<[\w\-.]+>")
         output_behavior_in = child.before.decode("utf-8")
+        output_commands.extend((prompt + output_behavior_in).split("\r\n"))
+
         output_trafficpolicy_in_pattern = re.search(rf'traffic policy {trafficpolicy_in_new}', output_behavior_in)
         if output_trafficpolicy_in_pattern:
             new_trafficpolicy_in_iscreated = True
@@ -885,22 +894,29 @@ def search_newbw_inACCESO(child=None, trafficpolicy = None, newbw = None, subint
             behavior_in_newNow = output_behavior_pattern_in.group(1)
         # Es en traffic-policy con nomenclatura diferente a interface
         if behavior_in_newNow != behavior_in_new: 
+            prompt = child.after.decode("utf-8")
             child.send(f"display curr configuration behavior {behavior_in_new}")
             time.sleep(TIME_SLEEP)
             child.sendline("")
             child.expect(r"<[\w\-.]+>")
             output_carcir_in = child.before.decode("utf-8")
+            output_commands.extend((prompt + output_carcir_in).split("\r\n"))
             output_carcir_pattern_in = re.search(rf"car cir {newbw_inKbps} pir {newbw_inKbps} cbs {cbs_pbs} pbs {cbs_pbs} ", output_carcir_in)
             if output_carcir_pattern_in:
                 carcir_in_newNow = True
+        else:
+            carcir_in_newNow = True
                 
 
         # OUT NEW
+        prompt = child.after.decode("utf-8")
         child.send(f"display curr configuration trafficpolicy {trafficpolicy_out_new}")
         time.sleep(TIME_SLEEP)
         child.sendline("")
         child.expect(r"<[\w\-.]+>")
         output_behavior_out = child.before.decode("utf-8")
+        output_commands.extend((prompt + output_behavior_out).split("\r\n"))
+
         output_trafficpolicy_out_pattern = re.search(rf'traffic policy {trafficpolicy_out_new}', output_behavior_out)
         if output_trafficpolicy_out_pattern:
             new_trafficpolicy_out_iscreated = True
@@ -908,14 +924,19 @@ def search_newbw_inACCESO(child=None, trafficpolicy = None, newbw = None, subint
         if output_behavior_pattern_out:
             behavior_out_newNow = output_behavior_pattern_out.group(1)
         if behavior_out_newNow != behavior_out_new: 
+            prompt = child.after.decode("utf-8")
             child.send(f"display curr configuration behavior {behavior_out_new}")
             time.sleep(TIME_SLEEP)
             child.sendline("")
             child.expect(r"<[\w\-.]+>")
             output_carcir_out = child.before.decode("utf-8")
+            output_commands.extend((prompt + output_carcir_out).split("\r\n"))
+
             output_carcir_pattern_out = re.search(rf"car cir {newbw_outKbps} pir {newbw_outKbps} cbs {cbs_pbs} pbs {cbs_pbs} ", output_carcir_out)
             if output_carcir_pattern_out:
                 carcir_out_newNow = True
+        else:
+            carcir_out_newNow = True
                 
         # 
         child.send(f"display current-configuration | inc traffic policy")
@@ -970,9 +991,9 @@ def search_newbw_inACCESO(child=None, trafficpolicy = None, newbw = None, subint
         result["addNewPolicyTraffic"] = addNewPolicyTraffic
         result["new_trafficpolicy_commands"] = trafficpolicy_configurationInACCESO(**values_for_commands)
         result["session_inACCESO"] = configuration_inHuawei(child, [], commit_acceso, isACCESO=True) if commit_acceso == "N" else configuration_inHuawei(child, result["new_trafficpolicy_commands"], commit_acceso, isACCESO=True)
-        return result
+        return result, output_commands
     else:
-        return None
+        return None, None
     
 
 

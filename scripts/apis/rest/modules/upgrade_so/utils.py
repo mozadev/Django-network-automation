@@ -221,14 +221,8 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade, d
 
         stack["listSOInStack"] = listSOInStack
         stack["listParcheInStack"] = listParcheInStack
-        if isinstance(soSizeInFTPInMegas, float) and isinstance(parcheSizeInFTPInMegas, float) and isinstance(stack["sizeFreeInStack"], float):
-            if (stack["sizeFreeInStack"] - (soSizeInFTPInMegas + parcheSizeInFTPInMegas)) > 0:
-                stack["sufficientCapacityInStack"]  = True
-            else:
-                stack["sufficientCapacityInStack"] = False
-        else:
-            stack["sizeFreeInStack"] = None 
-            stack["sufficientCapacityInStack"] = None
+
+        stack["sufficientCapacityInStack"] = calculateSpaceSuffient(soSizeInFTPInMegas, parcheSizeInFTPInMegas, stack["sizeFreeInStack"])
 
     result_stack = sorted(result_stack, key=master_isFirst)
     child.timeout = 3600
@@ -249,14 +243,14 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade, d
                 child.sendline("")
                 child.expect(r"\n\[ftp\]")
 
-                if not stack["soInStack"] and download == "Y":
+                if not stack["soInStack"] and download == "Y" and so_upgrade:
                     child.send(rf"get {so_upgrade}")
                     time.sleep(TIME_SLEEP)
                     child.sendline("")
                     child.expect(r"\n\[ftp\]")
                     soInMaster = True
                     
-                if not stack["parcheInStack"] and download == "Y":
+                if not stack["parcheInStack"] and download == "Y" and parche_upgrade:
                     child.send(rf"get {parche_upgrade}")
                     time.sleep(TIME_SLEEP)
                     child.sendline("")
@@ -271,7 +265,7 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade, d
             # SOLO COPIAR DE UN STACK A OTRO
             memberID = stack["MemberID"]
             if stack["sufficientCapacityInStack"]:
-                if not stack["soInStack"] and soInMaster and download == "Y":
+                if not stack["soInStack"] and soInMaster and download == "Y" and so_upgrade:
                     child.send(f"copy {so_upgrade} {memberID}#flash:")
                     time.sleep(TIME_SLEEP)
                     child.sendline("")
@@ -281,7 +275,7 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade, d
                     child.sendline("")
                     child.expect(r"\s<[\w\-.]+>")
 
-                if not stack["parcheInStack"] and parcheInMaster and download == "Y":
+                if not stack["parcheInStack"] and parcheInMaster and download == "Y" and parche_upgrade:
                     child.send(f"copy {parche_upgrade} {memberID}#flash:")
                     time.sleep(TIME_SLEEP)
                     child.sendline("")
@@ -299,8 +293,10 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade, d
 
     result["IPv4OfStack"] = ip
     result["IPv4OfFTPServer"] = ip_ftp
+    result["passIsEqualToFTPServer"] = pass_ftp
     result["newSOSearchedInFTPServer"] = so_upgrade
     result["newParcheSearchedInFTPServer"] = parche_upgrade
+    result["downloadFiles"] = download
     result["countStacks"] = len(result_stack)
     result["versionSwitchNow"] = version
     result["versionByStackNow"] = result_startup
@@ -323,3 +319,15 @@ def routersFTPFromIPv4(list_ip, ftp_server):
 
 def master_isFirst(elemento):
     return 0 if elemento["Role"] == "Master" else 1
+
+
+def calculateSpaceSuffient(soSizeInFTPInMegas, parcheSizeInFTPInMegas, sizeFreeInStack):
+    sufficientCapacity = False
+    if not soSizeInFTPInMegas: soSizeInFTPInMegas = 0.0
+    if not parcheSizeInFTPInMegas: parcheSizeInFTPInMegas = 0.0
+    sufficientCapacity = sizeFreeInStack - (soSizeInFTPInMegas + parcheSizeInFTPInMegas)
+
+    if sufficientCapacity > 0:
+        return True
+    else:
+        return False

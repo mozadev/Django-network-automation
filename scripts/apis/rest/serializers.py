@@ -83,10 +83,12 @@ class ReadCorreosPSTSerializer(serializers.Serializer):
 
 class UpgradeSOHuaweiSwitchSerializer(serializers.Serializer):
     user_tacacs = serializers.CharField(required=True, label="Usuario SWITCH")
-    pass_tacacs = serializers.CharField(style={'input_type': 'password'}, label="Password SWITCH")
+    pass_tacacs = serializers.CharField(required=True, style={'input_type': 'password'}, label="Password SWITCH")
+    ip_ftp = serializers.IPAddressField(required=True, protocol="IPv4",label="SERVIDOR FTP", help_text="Ejemplo: 172.19.216.127")
+    pass_ftp = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="Las credenciales del SERVIDOR FTP,¿son las mismas del SWITCH?")
     ip_switch = serializers.CharField(required=True, label="IPv4 del SWITCH", help_text="Ingresar las IPv4 separados por un Enter", max_length=1000, style={"base_template": "textarea.html", "rows": 3})
-    so_upgrade = serializers.CharField(required=True, label="Nuevo Sistema Operativo Huawei", help_text="Ejemplo: testing.cc")
-    parche_upgrade = serializers.CharField(required=True, label="Nuevo Parche del Sistema Operativo Huawei", help_text="Ejemplo: testing.pat")
+    so_upgrade = serializers.CharField(required=False, label="Nuevo Sistema Operativo Huawei", help_text="Ejemplo: testing.cc", default=None)
+    parche_upgrade = serializers.CharField(required=False, label="Nuevo Parche del Sistema Operativo Huawei", help_text="Ejemplo: testing.pat", default=None)
     download = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Descargar los ficheros?")
 
 

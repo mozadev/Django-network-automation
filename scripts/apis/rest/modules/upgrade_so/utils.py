@@ -8,7 +8,7 @@ import time
 # GLOBAL VARIABLES
 TIME_SLEEP = 0.1
 
-def to_router(list_ip_gestion, link, so_upgrade, parche_upgrade, user_tacacs, pass_tacacs, download):
+def to_router(list_ip_gestion, link, so_upgrade, parche_upgrade, user_tacacs, pass_tacacs, download, ip_ftp, pass_ftp):
     load_dotenv(override=True)
     CYBERARK_USER = os.getenv("CYBERARK_USER")
     CYBERARK_PASS = os.getenv("CYBERARK_PASS")
@@ -34,7 +34,7 @@ def to_router(list_ip_gestion, link, so_upgrade, parche_upgrade, user_tacacs, pa
         for ip in list_ip_gestion:
             item = {}
             item["ip"] = ip
-            result.append(to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade, download))
+            result.append(to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade, download, ip_ftp, pass_ftp))
             time.sleep(5)
         child.send("exit")
         time.sleep(TIME_SLEEP)
@@ -46,13 +46,13 @@ def to_router(list_ip_gestion, link, so_upgrade, parche_upgrade, user_tacacs, pa
         return {"msg": "ERROR, LA API DE DETUVO"}
 
 
-def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade, download):
+def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade, download, ip_ftp, pass_ftp):
     result = {}
     version = None
     vlanif199 = False
-    FILE_SERVER = os.getenv("FILE_SERVER")
-    FTP_USER = os.getenv("FTP_USER")
-    FTP_PASS = os.getenv("FTP_PASS")
+    FILE_SERVER = ip_ftp
+    FTP_USER = os.getenv("FTP_USER") if pass_ftp == "N" else user_tacacs
+    FTP_PASS = os.getenv("FTP_PASS") if pass_ftp == "N" else pass_tacacs
     interface_ip = None
     soSizeInFTPInMegas = None
     parcheSizeInFTPInMegas = None
@@ -298,6 +298,7 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade, d
     child.expect(r"\]\$")
 
     result["IPv4OfStack"] = ip
+    result["IPv4OfFTPServer"] = ip_ftp
     result["newSOSearchedInFTPServer"] = so_upgrade
     result["newParcheSearchedInFTPServer"] = parche_upgrade
     result["countStacks"] = len(result_stack)

@@ -418,6 +418,8 @@ class UpgradeSOHuaweiSwitchViewSets(viewsets.ViewSet):
         if serializer.is_valid():
             user_tacacs = serializer.validated_data["user_tacacs"]
             pass_tacacs = serializer.validated_data["pass_tacacs"]
+            ip_ftp = serializer.validated_data["ip_ftp"]
+            pass_ftp = serializer.validated_data["pass_ftp"]
             ip_switch = serializer.validated_data["ip_switch"]
             so_upgrade = serializer.validated_data["so_upgrade"]
             parche_upgrade = serializer.validated_data["parche_upgrade"]
@@ -428,7 +430,7 @@ class UpgradeSOHuaweiSwitchViewSets(viewsets.ViewSet):
             base_url = f"{parsed_url.scheme}://{parsed_url.hostname}:{parsed_url.port}"
             ip_switch_list = ip_switch.replace("\n", "").split("\r")
             
-            result = upgrade_so.to_router(ip_switch_list, base_url, so_upgrade, parche_upgrade, user_tacacs, pass_tacacs, download)
+            result = upgrade_so.to_router(ip_switch_list, base_url, so_upgrade, parche_upgrade, user_tacacs, pass_tacacs, download, ip_ftp, pass_ftp)
             return Response(result, status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

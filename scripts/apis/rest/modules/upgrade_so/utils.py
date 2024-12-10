@@ -19,6 +19,7 @@ def to_router(list_ip_gestion, link, so_upgrade, parche_upgrade, user_tacacs, pa
     file_txt = f"media/upgrade_so/{now}.txt"
     url_txt = f"{link}/{file_txt}"
     result = []
+    ip_fail = None
 
     try:
         # Ingreso al Cyberark
@@ -34,16 +35,20 @@ def to_router(list_ip_gestion, link, so_upgrade, parche_upgrade, user_tacacs, pa
         for ip in list_ip_gestion:
             item = {}
             item["ip"] = ip
+            ip_fail = ip
             result.append(to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade, download, ip_ftp, pass_ftp))
             time.sleep(5)
+
         child.send("exit")
         time.sleep(TIME_SLEEP)
         child.sendline("")
         child.close()
 
         return result
+    except pexpect.TIMEOUT:
+        return {"msg": f"ERROR, LA API SE DETUVO EN LA IP {ip_fail}"}
     except pexpect.ExceptionPexpect:
-        return {"msg": "ERROR, LA API DE DETUVO"}
+        return {"msg": "ERROR, LA API FALLÓ POR CREDENCIALES"}
 
 
 def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade, download, ip_ftp, pass_ftp):
@@ -225,7 +230,7 @@ def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade, d
         stack["sufficientCapacityInStack"] = calculateSpaceSuffient(soSizeInFTPInMegas, parcheSizeInFTPInMegas, stack["sizeFreeInStack"])
 
     result_stack = sorted(result_stack, key=master_isFirst)
-    child.timeout = 3600
+    child.timeout = 7200
     for stack in result_stack:
         if stack["Role"] == "Master":
             # IR AL SERVIDOR FTP

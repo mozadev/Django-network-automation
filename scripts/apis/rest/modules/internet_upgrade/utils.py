@@ -226,9 +226,9 @@ def to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, co
     # DIVIDIR ESCENARIOS DEPENDIENDO DE LA MASCARA
     pe_ismascara30 = is_mascara30(pe_ipmascara_found["mascara"])
     if pe_ismascara30:
-        newTrafficpolicyInPE, output_commands_pe  = search_newbw_inPEWithMask30(child, trafficpolicy_found, newbw, pesubinterface_found, commit_pe, output_commands_pe)
+        newTrafficpolicyInPE, output_commands_pe  = search_newbw_inPEWithMask30(child, trafficpolicy_found, newbw, pesubinterface_found, commit_pe, output_commands_pe, pesubinterface_physical)
     else:
-        newTrafficpolicyInPE, output_commands_pe = search_newbw_inPEWithOutMask30(child, trafficpolicy_found, newbw, pesubinterface_found, commit_pe, output_commands_pe)
+        newTrafficpolicyInPE, output_commands_pe = search_newbw_inPEWithOutMask30(child, trafficpolicy_found, newbw, pesubinterface_found, commit_pe, output_commands_pe, pesubinterface_physical)
     
     # OBTENER LA MAC DE LA WAN EN EL PE
     child.send(f"display arp all | i {wan_found}")
@@ -576,7 +576,7 @@ def is_mascara30(mascara):
         return False
 
 
-def search_newbw_inPEWithMask30(child = None, trafficpolicy = None, newbw = None, subinterface=None, commit_pe = "N", output_commands_pe=[]):
+def search_newbw_inPEWithMask30(child = None, trafficpolicy = None, newbw = None, subinterface=None, commit_pe = "N", output_commands_pe=[], pesubinterface_physical = None):
     result = {}
 
     if trafficpolicy:
@@ -592,6 +592,20 @@ def search_newbw_inPEWithMask30(child = None, trafficpolicy = None, newbw = None
         new_trafficpolicy_inMbps = trafficpolicy_pattern_input.group("pre") + f"{newbw}" + trafficpolicy_pattern_input.group("post")
         new_trafficpolicy_outMbps = trafficpolicy_pattern_output.group("pre") + f"{newbw}" + trafficpolicy_pattern_output.group("post")
 
+        # PHYSICAL
+        unitBW = None
+        capacidadBW = None
+
+        child.send(f"display interface {pesubinterface_physical} | include Port BW")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"<[\w\-.]+>")
+        output_interfaceBW = child.before.decode("utf-8")
+        output_interfaceBW_pattern = re.search(r"\nPort BW: (?P<capacidad>\d+)(?P<unit>[a-zA-Z]+),", output_interfaceBW)
+        if output_interfaceBW_pattern:
+            capacidadBW = int(output_interfaceBW_pattern.group("capacidad"))
+            unitBW = output_interfaceBW_pattern.group("unit")
+            
         # OLD
 
         # IN OLD
@@ -677,7 +691,8 @@ def search_newbw_inPEWithMask30(child = None, trafficpolicy = None, newbw = None
             if output_traffic_pattern_out:
                 traffic_out = int(output_traffic_pattern_out.group(1))
 
-
+        result["capacidadBWPhysical"] = capacidadBW
+        result["unitBWPhysical"] = unitBW
         result["old_BWInMegas"] = oldbw_input
         result["old_BWOutMegas"] = oldbw_output
         result["old_trafficpolicy_inMbps"] = old_trafficpolicy_inMbps
@@ -1172,5 +1187,65 @@ def configuration_inCisco(child, commands, commit):
     return result
 
 
-def search_newbw_inPEWithOutMask30(child, trafficpolicy_found, newbw, pesubinterface_found, commit_pe, output_commands_pe):
-    return None, output_commands_pe
+def search_newbw_inPEWithOutMask30(child, trafficpolicy_found, newbw, pesubinterface_found, commit_pe, output_commands_pe, pesubinterface_physical):
+    result = None
+    unitBW = None
+    capacidadBW = None
+
+    child.send(f"display interface {pesubinterface_physical} | include Port BW")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"<[\w\-.]+>")
+    output_interfaceBW = child.before.decode("utf-8")
+    output_interfaceBW_pattern = re.search(r"\nPort BW: (?P<capacidad>\d+)(?P<unit>[a-zA-Z]+),", output_interfaceBW)
+    if output_interfaceBW_pattern:
+        capacidadBW = int(output_interfaceBW_pattern.group("capacidad"))
+        unitBW = output_interfaceBW_pattern.group("unit")
+
+    child.send(f"display current-configuration interface | section include {pesubinterface_physical} | no-more")
+    time.sleep(TIME_SLEEP)
+    child.sendline("")
+    child.expect(r"<[\w\-.]+>")
+    output_currentconfiguration = child.before.decode("utf-8")
+    output_currentconfiguration_pattern = re.split("\r\n#\r\n", output_currentconfiguration)
+
+    count_interfaces = len(output_currentconfiguration_pattern) - 1
+    if count_interfaces > 0:
+        result = {}
+        output_currentconfiguration_pattern.pop(0)
+        interfaces = []
+        for interface in output_currentconfiguration_pattern:
+            interfaces.append(re.split("\r\n", interface))
+        
+        detail_subinterfaces = []
+        for item_interface in interfaces:
+            detail_subinterfaces_item = {}
+            interface_name_found = None
+            interface_description_found = None 
+            interface_trafficpolice_in_found = None
+            interface_trafficpolice_out_found = None
+            for i in item_interface:
+                interface_name = re.search(r"^interface (?P<subinterface>\S+)", i)
+                interface_description = re.search(r"description (?P<description>.*)", i)
+                interface_trafficpolice_in = re.search(r"traffic-policy (?P<in>\S+) inbound", i)
+                interface_trafficpolice_out = re.search(r"traffic-policy (?P<out>\S+) outbound", i)
+                if interface_name:
+                    interface_name_found = interface_name.group("subinterface")
+                if interface_description:
+                    interface_description_found = interface_description.group("description")
+                if interface_trafficpolice_in:
+                    interface_trafficpolice_in_found = interface_trafficpolice_in.group("in")
+                if interface_trafficpolice_out:
+                    interface_trafficpolice_out_found = interface_trafficpolice_out.group("out")
+            
+            detail_subinterfaces_item["subinterface"] = interface_name_found
+            detail_subinterfaces_item["description"] = interface_description_found
+            detail_subinterfaces_item["trafficpolice_in"] = interface_trafficpolice_in_found
+            detail_subinterfaces_item["trafficpolice_out"] = interface_trafficpolice_out_found
+            detail_subinterfaces.append(detail_subinterfaces_item)
+
+        result["capacidadBWPhysical"] = capacidadBW
+        result["unitBWPhysical"] = unitBW
+        result["countSubInterfaces"] = count_interfaces
+        #result["detailSubinterfaces"] = detail_subinterfaces
+    return result, output_commands_pe

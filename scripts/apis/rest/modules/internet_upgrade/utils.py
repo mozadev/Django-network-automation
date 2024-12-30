@@ -645,6 +645,8 @@ def search_newbw_inPEWithMask30(child = None, trafficpolicy = None, newbw = None
         traffic_out = None
         new_behavior_in_found = False
         new_behavior_out_found = False
+        new_trafficpolicy_in_iscreated = False
+        new_trafficpolicy_out_iscreated = False
 
         # IN NEW
         pe_prompt = child.after.decode("utf-8")
@@ -658,6 +660,8 @@ def search_newbw_inPEWithMask30(child = None, trafficpolicy = None, newbw = None
         output_behavior_pattern_in = re.search(r'classifier \S+ behavior ([\w\-.]+) ', output_behavior_in)
         if output_behavior_pattern_in:
             behavior_in = output_behavior_pattern_in.group(1)
+            if behavior_in == new_trafficpolicy_inMbps:
+                new_trafficpolicy_in_iscreated = True
 
         pe_prompt = child.after.decode("utf-8")
         child.send(f"display curr configuration behavior {new_trafficpolicy_inMbps} | no-more")
@@ -670,6 +674,8 @@ def search_newbw_inPEWithMask30(child = None, trafficpolicy = None, newbw = None
         output_traffic_pattern_in = re.search(r"car cir (\d+) ", output_traffic_in)
         if output_traffic_pattern_in:
             traffic_in = int(output_traffic_pattern_in.group(1))
+            if traffic_in == newbw * 1024:
+                new_behavior_in_found = True
         
         # OUT NEW
         pe_prompt = child.after.decode("utf-8")
@@ -683,6 +689,8 @@ def search_newbw_inPEWithMask30(child = None, trafficpolicy = None, newbw = None
         output_behavior_pattern_out = re.search(r'classifier \S+ behavior ([\w\-.]+) ', output_behavior_out)
         if output_behavior_pattern_out:
             behavior_out = output_behavior_pattern_out.group(1)
+            if behavior_out == new_trafficpolicy_outMbps:
+                new_trafficpolicy_out_iscreated = True
 
         pe_prompt = child.after.decode("utf-8")
         child.send(f"display curr configuration behavior {new_trafficpolicy_outMbps} | no-more")
@@ -695,6 +703,11 @@ def search_newbw_inPEWithMask30(child = None, trafficpolicy = None, newbw = None
         output_traffic_pattern_out = re.search(r"car cir (\d+) ", output_traffic_out)
         if output_traffic_pattern_out:
             traffic_out = int(output_traffic_pattern_out.group(1))
+            if traffic_out == newbw * 1024:
+                new_behavior_out_found = True 
+
+        if new_trafficpolicy_in_iscreated and not new_behavior_in_found: return None, output_commands_pe
+        if new_trafficpolicy_out_iscreated and not new_behavior_out_found: return None, output_commands_pe
 
         result["capacidadBWPhysical"] = capacidadBW
         result["unitBWPhysical"] = unitBW
@@ -709,35 +722,28 @@ def search_newbw_inPEWithMask30(child = None, trafficpolicy = None, newbw = None
 
         result["new_trafficpolicy_inMbps"] = new_trafficpolicy_inMbps
         result["new_trafficpolicy_outMbps"] = new_trafficpolicy_outMbps
-        if traffic_in == newbw * 1024:
-            result["new_trafficpolicy_in_iscreated"] = True
-        else:
-            result["new_trafficpolicy_in_iscreated"] = False
-
-        if traffic_out == newbw * 1024:
-            result["new_trafficpolicy_out_iscreated"] = True
-        else:
-            result["new_trafficpolicy_out_iscreated"] = False
+        result["new_trafficpolicy_in_iscreated"] = new_trafficpolicy_in_iscreated
+        result["new_trafficpolicy_out_iscreated"] = new_trafficpolicy_out_iscreated
 
         result["new_behavior_in_newNow"] = behavior_in
         result["new_behavior_out_newNow"] = behavior_out
-        """
-        "new_behavior_in_newNow": null,
-        "new_behavior_out_newNow": null,
-        "new_behavior_in_found": false,
-        "new_behavior_out_found": false,
-        """
+        result["new_behavior_in_found"] = new_behavior_in_found
+        result["new_behavior_out_found"] = new_behavior_out_found
 
-        result["new_trafficpolicy_commands"] = trafficpolicy_configurationInPE(
-            new_trafficpolicy_inMbps, 
-            new_trafficpolicy_outMbps, 
-            newbw, 
-            classifier_in_old, 
-            classifier_out_old, 
-            subinterface,
-            result["new_trafficpolicy_in_iscreated"],
-            result["new_trafficpolicy_out_iscreated"],
-        )
+        kargs = {
+            "new_trafficpolicy_inMbps": new_trafficpolicy_inMbps,
+            "new_trafficpolicy_outMbps": new_trafficpolicy_outMbps,
+            "newbw": newbw,
+            "classifier_in_old": classifier_in_old,
+            "classifier_out_old": classifier_out_old,
+            "subinterface": subinterface,
+            "new_trafficpolicy_in_iscreated": new_trafficpolicy_in_iscreated,
+            "new_trafficpolicy_out_iscreated": new_trafficpolicy_out_iscreated,
+            "new_behavior_in_found": new_behavior_in_found,
+            "new_behavior_out_found": new_behavior_out_found,
+        }
+
+        result["new_trafficpolicy_commands"] = trafficpolicy_configurationInPE(**kargs)
 
         result["session_inPE"] = configuration_inHuawei(child, result["new_trafficpolicy_commands"], commit_pe)
 
@@ -814,48 +820,57 @@ def configuration_inHuawei(child, commands, commit, isACCESO=False):
     return result
     
 
-def trafficpolicy_configurationInPE(trafficpolicy_in, trafficpolicy_out, bw, classifier_in, classifier_out, subinterface, in_iscreated, out_iscreated):
-    
+def trafficpolicy_configurationInPE(**kwargs):
     result = []
 
-    if not in_iscreated:
+    if not kwargs["new_behavior_in_found"]:
         result.extend(
             [
-                f"traffic behavior {trafficpolicy_in}",
-                f" car cir {bw * 1024}",
-                f" quit",
-
-                f"traffic policy {trafficpolicy_in}",
-                f" undo share-mode",
-                f" statistics enable",
-                f" classifier {classifier_in} behavior {trafficpolicy_in} precedence 1",
-                f" quit",
+                "traffic behavior {trafficpolicy_in}".format(trafficpolicy_in=kwargs["new_trafficpolicy_inMbps"]),
+                " car cir {car_cir}".format(car_cir=kwargs["newbw"] * 1024),
+                " quit",
             ]
         )
 
-    if not out_iscreated:
+    if not kwargs["new_trafficpolicy_in_iscreated"]:
         result.extend(
             [
-                f"traffic behavior {trafficpolicy_out}",
-                f" car cir {bw * 1024}",
-                f" quit",
-                
-                f"traffic policy {trafficpolicy_out}",
-                f" undo share-mode",
-                f" statistics enable",
-                f" classifier {classifier_out} behavior {trafficpolicy_out} precedence 1",
-                f" quit",
+                "traffic policy {trafficpolicy_in}".format(trafficpolicy_in=kwargs["new_trafficpolicy_inMbps"]),
+                " undo share-mode",
+                " statistics enable",
+                " classifier {classifier_in} behavior {trafficpolicy_in} precedence 1".format(classifier_in=kwargs["classifier_in_old"], trafficpolicy_in=kwargs["new_trafficpolicy_inMbps"]),
+                " quit",   
+            ]
+        )
+
+    if not kwargs["new_behavior_out_found"]:
+        result.extend(
+            [
+                "traffic behavior {trafficpolicy_out}".format(trafficpolicy_out=kwargs["new_trafficpolicy_outMbps"]),
+                " car cir {car_cir}".format(car_cir=kwargs["newbw"] * 1024),
+                " quit",
+            ]
+        )
+
+    if not kwargs["new_trafficpolicy_out_iscreated"]:
+        result.extend(
+            [
+                "traffic policy {trafficpolicy_out}".format(trafficpolicy_out=kwargs["new_trafficpolicy_outMbps"]),
+                " undo share-mode",
+                " statistics enable",
+                " classifier {classifier_out} behavior {trafficpolicy_out} precedence 1".format(classifier_out=kwargs["classifier_out_old"], trafficpolicy_out=kwargs["new_trafficpolicy_outMbps"]),
+                " quit",   
             ]
         )
 
     result.extend(
         [
-            f"interface {subinterface}",
-            f" undo traffic-policy inbound",
-            f" undo traffic-policy outbound",
-            f" traffic-policy {trafficpolicy_in} inbound",
-            f" traffic-policy {trafficpolicy_out} outbound",
-            f" quit",
+            "interface {subinterface}".format(subinterface=kwargs["subinterface"]),
+            " undo traffic-policy inbound",
+            " undo traffic-policy outbound",
+            " traffic-policy {trafficpolicy_in} inbound".format(trafficpolicy_in=kwargs["new_trafficpolicy_inMbps"]),
+            " traffic-policy {trafficpolicy_out} outbound".format(trafficpolicy_out=kwargs["new_trafficpolicy_outMbps"]),
+            " quit",
         ]
     )
 
@@ -952,7 +967,7 @@ def search_newbw_inACCESO(child=None, trafficpolicy = None, newbw = None, subint
         output_carcir_in = child.before.decode("utf-8")
         output_commands.extend((prompt + output_carcir_in).split("\r\n"))
         if behavior_in_newNow != behavior_in_new: 
-            output_carcir_pattern_in = re.search(rf"car cir {newbw_inKbps} pir {newbw_inKbps} cbs {cbs_pbs} pbs {cbs_pbs} ", output_carcir_in)
+            output_carcir_pattern_in = re.search(rf"car cir {newbw_inKbps} ", output_carcir_in)
             if output_carcir_pattern_in:
                 carcir_in_newNow = True
         else:
@@ -984,7 +999,7 @@ def search_newbw_inACCESO(child=None, trafficpolicy = None, newbw = None, subint
         output_commands.extend((prompt + output_carcir_out).split("\r\n"))
 
         if behavior_out_newNow != behavior_out_new: 
-            output_carcir_pattern_out = re.search(rf"car cir {newbw_outKbps} pir {newbw_outKbps} cbs {cbs_pbs} pbs {cbs_pbs} ", output_carcir_out)
+            output_carcir_pattern_out = re.search(rf"car cir {newbw_outKbps} ", output_carcir_out)
             if output_carcir_pattern_out:
                 carcir_out_newNow = True
         else:
@@ -1347,17 +1362,20 @@ def search_newbw_inPEWithOutMask30(child, trafficpolicy_found, newbw, pesubinter
         result["new_behavior_in_found"] = new_behavior_in_found
         result["new_behavior_out_found"] = new_behavior_out_found
 
-        result["new_trafficpolicy_commands"] = trafficpolicy_configurationInPE(
-            new_trafficpolicy_inMbps, 
-            new_trafficpolicy_outMbps, 
-            (newbw + oldbw_input) * 1024, 
-            classifier_old_in, 
-            classifier_old_out, 
-            pesubinterface_found,
-            result["new_trafficpolicy_in_iscreated"],
-            result["new_trafficpolicy_out_iscreated"],
-        )
+        kargs = {
+            "new_trafficpolicy_inMbps": new_trafficpolicy_inMbps,
+            "new_trafficpolicy_outMbps": new_trafficpolicy_outMbps,
+            "newbw": (newbw + oldbw_input) * 1024,
+            "classifier_in_old": classifier_old_in,
+            "classifier_out_old": classifier_old_out,
+            "subinterface": pesubinterface_found,
+            "new_trafficpolicy_in_iscreated": new_trafficpolicy_in_iscreated,
+            "new_trafficpolicy_out_iscreated": new_trafficpolicy_out_iscreated,
+            "new_behavior_in_found": new_behavior_in_found,
+            "new_behavior_out_found": new_behavior_out_found,
+        }
 
+        result["new_trafficpolicy_commands"] = trafficpolicy_configurationInPE(**kargs)
         result["session_inPE"] = configuration_inHuawei(child, result["new_trafficpolicy_commands"], commit_pe)
     return result, output_commands_pe
 

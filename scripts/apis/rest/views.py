@@ -328,9 +328,12 @@ class InternetUpgrade(viewsets.ViewSet):
             commit_cpe = serializer.validated_data["commit_cpe"]
             cid = serializer.validated_data["cid"]
             newbw = serializer.validated_data["newbw"]
+            email = serializer.validated_data["email"]
 
             cid_list = cid.replace("\n", "").split("\r")
             result = internet_upgrade.to_server(user_tacacs, pass_tacacs, cid_list, "xd", commit_pe, commit_acceso, commit_cpe, newbw)
+            send_correos = internet_upgrade.SendMailHitss(result, email)
+            send_correos.send_email()
             return Response(result, status=status.HTTP_200_OK)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

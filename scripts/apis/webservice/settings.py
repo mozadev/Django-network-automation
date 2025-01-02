@@ -12,6 +12,15 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 import os
+import socket
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
+
+def get_active_interface_ip():
+    hostname = socket.gethostname()
+    return socket.gethostbyname(hostname)
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -85,7 +94,7 @@ DATABASES = {
         'NAME': 'apis',
         'USER': 'apis',
         "PASSWORD": 'apis_2024',
-        "HOST": '10.200.90.248',
+        "HOST": get_active_interface_ip(),
         "PORT": '5430',
 
     }
@@ -162,3 +171,10 @@ CORS_ORIGIN_ALLOW_ALL = True
 #]
 
 CORS_ALLOW_CREDENTIALS = True
+
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.getenv("EMAIL_AUTOSEP_USER")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_AUTOSEP_PASS")

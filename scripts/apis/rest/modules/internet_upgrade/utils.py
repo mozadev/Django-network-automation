@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 import time
 import re
+from django.core.mail import send_mail
 
 # GLOBAL VARIABLES
 TIME_SLEEP = 0.1
@@ -1380,3 +1381,19 @@ def search_newbw_inPEWithOutMask30(child, trafficpolicy_found, newbw, pesubinter
     return result, output_commands_pe
 
 
+class SendMailHitss(object):
+    def __init__(self, data, to):
+        self.data = data
+        self.to = to
+
+    def send_email(self,):
+        load_dotenv(override=True)
+        send_mail(
+            'TEST',
+            'Contenido del correo',
+            os.getenv("EMAIL_AUTOSEP_USER"),
+            [self.to],
+            fail_silently=False,
+        )
+        return
+        

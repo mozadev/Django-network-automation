@@ -132,3 +132,17 @@ class UploadSGATicketsSerializer(serializers.Serializer):
             raise serializers.ValidationError("El archivo debe ser de tipo .xlsx")
         return value
 
+
+class ReadInDeviceSerializer(serializers.Serializer):
+    user_tacacs = serializers.CharField(required=True, label="Usuario")
+    pass_tacacs = serializers.CharField(required=True, style={'input_type': 'password'}, label="Password")
+    upload_ip = serializers.FileField(allow_empty_file=False, label="UPLOAD LIST OF IP", required=True)
+    commands = serializers.CharField(required=True, label="Commands", help_text="Ingresar los comandos de solo lectura", max_length=1000, style={"base_template": "textarea.html", "rows": 3})
+    email = serializers.EmailField(required=False, label="Correo en dónde se enviará los ficheros de salida")
+
+    def validate_upload_ip(self, value):
+        if not value.name.endswith('.xlsx'):
+            raise serializers.ValidationError("Solo se permiten archivos con formato .xlsx")
+        if value.content_type != 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+            raise serializers.ValidationError("El archivo debe ser de tipo .xlsx")
+        return value

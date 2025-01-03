@@ -1389,11 +1389,16 @@ class SendMailHitss(object):
     def send_email(self,):
         load_dotenv(override=True)
         send_mail(
-            'TEST',
+            'AUTOSEP: Upgrade de internet',
             'Contenido del correo',
             os.getenv("EMAIL_AUTOSEP_USER"),
             [self.to],
             fail_silently=False,
         )
         return
+    
+
+class CreateInforme(object):
+    def __init__(self):
+        pass
         

@@ -71,7 +71,7 @@ class InternetUpgradeSerializer(serializers.Serializer):
     commit_pe = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear los cambios en el PE?")
     commit_acceso = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear los cambios en el ACCESO?")
     commit_cpe = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear los cambios en el CPE?")
-    email = serializers.EmailField(required=False, label="Correo en dónde se enviará los detalles")
+    email = serializers.EmailField(required=True, label="Correo en dónde se enviará los detalles")
 
 
 class InterfacesStatusHuaweiSerializer(serializers.Serializer):

@@ -17,6 +17,7 @@ from rest_framework.reverse import reverse
 from urllib.parse import urlparse
 import pypff
 from striprtf.striprtf import rtf_to_text
+from datetime import datetime
 
 class UserViewSet(viewsets.ModelViewSet):
     """
@@ -331,9 +332,21 @@ class InternetUpgrade(viewsets.ViewSet):
             email = serializer.validated_data["email"]
 
             cid_list = cid.replace("\n", "").split("\r")
-            result = internet_upgrade.to_server(user_tacacs, pass_tacacs, cid_list, "xd", commit_pe, commit_acceso, commit_cpe, newbw)
-            send_correos = internet_upgrade.SendMailHitss(result, email)
-            send_correos.send_email()
+            now = datetime.now()
+
+            result = internet_upgrade.to_server(user_tacacs, pass_tacacs, cid_list, now.strftime("%Y%m%d%H%M%S"), commit_pe, commit_acceso, commit_cpe, newbw)
+            if isinstance(result, list):
+                if commit_pe == "N" and commit_acceso == "N" and commit_cpe == "N":
+                    create_informe = internet_upgrade.CreateInforme(
+                        "templates/informes/upgrade_internet_plantilla.docx", 
+                        result,
+                        "{fecha}".format(fecha=now.strftime("%d/%m/%Y %H:%M:%S")),
+                        newbw,
+                        "media/internet_upgrade/informes/{now}.docx".format(now=now.strftime("%Y%m%d%H%M%S"))
+                        )
+                    informe = create_informe.create()
+                    send_correos = internet_upgrade.SendMailHitss(informe, email)
+                    send_correos.send_email()
             return Response(result, status=status.HTTP_200_OK)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

@@ -4,22 +4,21 @@ from dotenv import load_dotenv
 from datetime import datetime
 import time
 import re
-from django.core.mail import send_mail
+from django.core.mail import send_mail, EmailMessage
+from docxtpl import DocxTemplate
 
 # GLOBAL VARIABLES
 TIME_SLEEP = 0.1
 
 
-def to_server(user_tacacs, pass_tacacs, cid_list, ip_owner, commit_pe, commit_acceso, commit_cpe, newbw):
+def to_server(user_tacacs, pass_tacacs, cid_list, now, commit_pe, commit_acceso, commit_cpe, newbw):
     load_dotenv(override=True)
     CYBERARK_USER = os.getenv("CYBERARK_USER")
     CYBERARK_PASS = os.getenv("CYBERARK_PASS")
     CYBERARK_IP = os.getenv("CYBERARK_IP")
     CRT_IP = os.getenv("CRT_IP")
     CRT_USER = os.getenv("CRT_USER")
-    now = datetime.now().strftime("%Y%m%d%H%M%S")
     name_file = f"media/internet_upgrade/{now}.txt"
-    url_file = f"{ip_owner}/{name_file}"
     result = []
 
     try:
@@ -1382,23 +1381,66 @@ def search_newbw_inPEWithOutMask30(child, trafficpolicy_found, newbw, pesubinter
 
 
 class SendMailHitss(object):
-    def __init__(self, data, to):
-        self.data = data
+    def __init__(self, file, to):
+        self.file = file
         self.to = to
 
     def send_email(self,):
         load_dotenv(override=True)
-        send_mail(
-            'AUTOSEP: Upgrade de internet',
-            'Contenido del correo',
-            os.getenv("EMAIL_AUTOSEP_USER"),
-            [self.to],
-            fail_silently=False,
+
+        email = EmailMessage(
+            subject="AUTOSEP: Upgrade de internet",
+            body="Estimados,\n Se adjunta el informe del upgrade de internet",
+            from_email=os.getenv("EMAIL_AUTOSEP_USER"),
+            to=[self.to],
         )
+
+        with open(self.file, 'rb') as f:
+            email.attach('informe.docx', f.read(), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+
+        email.send()
         return
     
 
 class CreateInforme(object):
-    def __init__(self):
-        pass
+    def __init__(self, template, data, fecha, newbw, name):
+        self.template = template
+        self.data = data
+        self.fecha = fecha
+        self.newbw = newbw
+        self.name = name
+        self.result = []
+
+    def create(self):
+        doc = DocxTemplate(self.template)
+        for i in self.data:
+            if i["status"] == 200:
+                self.result.append(i)
+        
+        self.context = {
+            "result": self.result,
+            "newbw": self.newbw,
+            "fecha": self.fecha,
+        }
+        self.context = replace_none_recursively(self.context, default_value=[])
+        doc.render(self.context)
+        doc.save(self.name)
+        return self.name
+
+
+def replace_none_recursively(data, default_value=None):
+    """
+    Reemplaza valores None en una estructura anidada con un valor predeterminado.
+
+    :param data: Diccionario o lista anidados.
+    :param default_value: Valor predeterminado para reemplazar None.
+    :return: Estructura con None reemplazado.
+    """
+    if isinstance(data, dict):
+        return {k: replace_none_recursively(v, default_value) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [replace_none_recursively(v, default_value) for v in data]
+    elif data is None:
+        return default_value
+    return data
         

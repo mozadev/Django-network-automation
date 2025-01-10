@@ -501,10 +501,18 @@ class ReadInDeviceViewSet(viewsets.ViewSet):
 
                 list_of_ip =  read_in_device.list_of_ip(upload_ip)
                 commands = list(commands.split("\r\n"))
-                read_in_device.session_in_device(user_tacacs, pass_tacacs, list_of_ip, commands)
+                session = read_in_device.session_in_device(user_tacacs, pass_tacacs, list_of_ip, commands)
+                if isinstance(session, read_in_device.CustomPexpectError): 
+                    raise session
+                elif isinstance(session, read_in_device.NotEnterToDevice):
+                    raise session
             except read_in_device.IPv4NotValidas as e:
                 return Response({"detail": f"ERROR:  {e}", "status": e.code}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
-            return Response({"detail": "EXITOSO"}, status=status.HTTP_200_OK)
+            except read_in_device.CustomPexpectError as e:
+                return Response({"detail": f"ERROR:  {e}", "status": e.code}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            except Exception as e:
+                return Response({"detail": f"ERROR:  {e}", "status": 501}, status=status.HTTP_501_NOT_IMPLEMENTED)
+            else:
+                return Response(session, status=status.HTTP_200_OK)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

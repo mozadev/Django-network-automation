@@ -311,7 +311,7 @@ class AnexosUploadDashboard2(viewsets.ViewSet):
 
 class InternetUpgrade(viewsets.ViewSet):
     """
-    Este es la documentación
+    Se tiene que ingresar un excel con los campos **cid** y **newbw**
     """
     serializer_class = InternetUpgradeSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -327,21 +327,19 @@ class InternetUpgrade(viewsets.ViewSet):
             commit_pe = serializer.validated_data["commit_pe"]
             commit_acceso = serializer.validated_data["commit_acceso"]
             commit_cpe = serializer.validated_data["commit_cpe"]
-            cid = serializer.validated_data["cid"]
-            newbw = serializer.validated_data["newbw"]
             email = serializer.validated_data["email"]
+            cid_newbw = serializer.validated_data["cid_newbw"]
 
-            cid_list = cid.replace("\n", "").split("\r")
             now = datetime.now()
+            cid_list = internet_upgrade.get_cid_newbw(cid_newbw)
+            result = internet_upgrade.to_server(user_tacacs, pass_tacacs, cid_list, now.strftime("%Y%m%d%H%M%S"), commit_pe, commit_acceso, commit_cpe)
 
-            result = internet_upgrade.to_server(user_tacacs, pass_tacacs, cid_list, now.strftime("%Y%m%d%H%M%S"), commit_pe, commit_acceso, commit_cpe, newbw)
             if isinstance(result, list):
                 if commit_pe == "N" and commit_acceso == "N" and commit_cpe == "N":
                     create_informe = internet_upgrade.CreateInforme(
                         "templates/informes/upgrade_internet_plantilla.docx", 
                         result,
                         "{fecha}".format(fecha=now.strftime("%d/%m/%Y %H:%M:%S")),
-                        newbw,
                         "media/internet_upgrade/informes/{now}.docx".format(now=now.strftime("%Y%m%d%H%M%S"))
                         )
                     informe = create_informe.create()

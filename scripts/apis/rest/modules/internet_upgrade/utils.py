@@ -1,17 +1,17 @@
 import pexpect
 import os
 from dotenv import load_dotenv
-from datetime import datetime
 import time
 import re
-from django.core.mail import send_mail, EmailMessage
+from django.core.mail import EmailMessage
 from docxtpl import DocxTemplate
+import pandas as pd
 
 # GLOBAL VARIABLES
 TIME_SLEEP = 0.1
 
 
-def to_server(user_tacacs, pass_tacacs, cid_list, now, commit_pe, commit_acceso, commit_cpe, newbw):
+def to_server(user_tacacs, pass_tacacs, cid_list, now, commit_pe, commit_acceso, commit_cpe):
     load_dotenv(override=True)
     CYBERARK_USER = os.getenv("CYBERARK_USER")
     CYBERARK_PASS = os.getenv("CYBERARK_PASS")
@@ -32,12 +32,12 @@ def to_server(user_tacacs, pass_tacacs, cid_list, now, commit_pe, commit_acceso,
         child.expect(f"address:")
         child.sendline(CRT_IP)
         child.expect(r"\]\$")
-        for cid in cid_list:
+        for i in cid_list:
             item = {}
-            item["cid"] = cid
-            item["newBW"] = newbw
+            item["cid"] = i["cid"]
+            item["newBW"] = i["newbw"]
             item["commit_pe"], item["commit_acceso"], item["commit_cpe"] = commit_pe, commit_acceso, commit_cpe
-            item["msg"], item["status"] = to_router(child, user_tacacs, pass_tacacs, cid, commit_pe, commit_acceso, commit_cpe, newbw)
+            item["msg"], item["status"] = to_router(child, user_tacacs, pass_tacacs, i["cid"], commit_pe, commit_acceso, commit_cpe, i["newbw"])
             result.append(item)
             time.sleep(5)
         child.send("exit")
@@ -1403,11 +1403,10 @@ class SendMailHitss(object):
     
 
 class CreateInforme(object):
-    def __init__(self, template, data, fecha, newbw, name):
+    def __init__(self, template, data, fecha, name):
         self.template = template
         self.data = data
         self.fecha = fecha
-        self.newbw = newbw
         self.name = name
         self.result = []
 
@@ -1419,7 +1418,6 @@ class CreateInforme(object):
         
         self.context = {
             "result": self.result,
-            "newbw": self.newbw,
             "fecha": self.fecha,
         }
         self.context = replace_none_recursively(self.context, default_value=[])
@@ -1444,3 +1442,9 @@ def replace_none_recursively(data, default_value=None):
         return default_value
     return data
         
+
+def get_cid_newbw(file):
+    data = pd.read_excel(file, usecols=["cid", "newbw"])
+    return data.to_dict(orient="records")
+
+

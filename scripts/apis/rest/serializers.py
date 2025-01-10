@@ -66,12 +66,18 @@ class AnexosRegistrosSerializer(serializers.ModelSerializer):
 class InternetUpgradeSerializer(serializers.Serializer):
     user_tacacs = serializers.CharField(required=True, label="Usuario TACACS")
     pass_tacacs = serializers.CharField(style={'input_type': 'password'}, label="Password TACACS")
-    cid = serializers.CharField(required=True, label="CID", help_text="Ingresar los ciruitos de internet separados por un enter", max_length=1000, style={"base_template": "textarea.html", "rows": 3})
-    newbw = serializers.IntegerField(required=True, min_value=0, label="Nuevo Ancho de Banda (Mbps)")
+    cid_newbw = serializers.FileField(allow_empty_file=False, label="UPLOAD CID y BW", required=True)
     commit_pe = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear los cambios en el PE?")
     commit_acceso = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear los cambios en el ACCESO?")
     commit_cpe = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear los cambios en el CPE?")
     email = serializers.EmailField(required=True, label="Correo en dónde se enviará los detalles")
+
+    def validate_cid_newbw(self, value):
+        if not value.name.endswith('.xlsx'):
+            raise serializers.ValidationError("Solo se permiten archivos con formato .xlsx")
+        if value.content_type != 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+            raise serializers.ValidationError("El archivo debe ser de tipo .xlsx")
+        return value
 
 
 class InterfacesStatusHuaweiSerializer(serializers.Serializer):

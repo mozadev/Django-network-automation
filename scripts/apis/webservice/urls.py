@@ -44,6 +44,7 @@ router.register(r"read-pst-file", views.ReadCorreosPSTViewSets, basename='read-p
 router.register(r'upgrade-so-huawei-switch', views.UpgradeSOHuaweiSwitchViewSets, basename='upgrade-so-huawei-switch')
 router.register(r'upload-correos-tickets', views.UploadCorreosTicketsViewSet, basename='upload-correos-tickets')
 router.register(r'upload-sga-tickets', views.UploadSGATicketsViewSet, basename='upload-sga-tickets')
+router.register(r'read-in-device', views.ReadInDeviceViewSet, basename='read-in-device')
 
 # Wire up our API using automatic URL routing.
 # Additionally, we include login URLs for the browsable API.

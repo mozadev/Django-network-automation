@@ -2,7 +2,7 @@ from django.contrib.auth.models import Group, User
 from rest_framework import permissions, viewsets
 from rest.serializers import GroupSerializer, UserSerializer, ChangeVRFSerializer, ChangeVrfFromExcelSerializer, SuspensionAndReconnectionSerializer
 from rest.serializers import AnexosUploadCsvSerializer, InternetUpgradeSerializer, InterfacesStatusHuaweiSerializer, ReadCorreosPSTSerializer
-from rest.serializers import UpgradeSOHuaweiSwitchSerializer, UploadCorreosTicketsSerializer, UploadSGATicketsSerializer
+from rest.serializers import UpgradeSOHuaweiSwitchSerializer, UploadCorreosTicketsSerializer, UploadSGATicketsSerializer, ReadInDeviceSerializer
 from .models import AnexosRegistros, AnexosUpload
 from rest_framework.response import Response
 from rest_framework import status
@@ -12,6 +12,7 @@ import rest.modules.upload_anexos.utils as upload_anexos
 import rest.modules.internet_upgrade.utils as internet_upgrade
 import rest.modules.interfaces_status.utils as interfaces_status
 import rest.modules.upgrade_so.utils as upgrade_so
+import rest.modules.read_in_device.utils as read_in_device
 from rest_framework.renderers import TemplateHTMLRenderer
 from rest_framework.reverse import reverse
 from urllib.parse import urlparse
@@ -485,3 +486,44 @@ class UploadSGATicketsViewSet(viewsets.ViewSet):
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
+
+class ReadInDeviceViewSet(viewsets.ViewSet):
+    """
+    El excel debe tener una columna con el nombre **ip**
+    """
+    serializer_class = ReadInDeviceSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def list(self, request):
+        return Response(status=status.HTTP_200_OK)
+    
+    def create(self, request):
+        serializer = ReadInDeviceSerializer(data=request.data)
+        if serializer.is_valid():
+            try:
+                try:
+                    user_tacacs = serializer.validated_data["user_tacacs"]
+                    pass_tacacs = serializer.validated_data["pass_tacacs"]
+                    upload_ip = serializer.validated_data["upload_ip"]
+                    commands = serializer.validated_data["commands"]
+                    email = serializer.validated_data["email"]
+                except KeyError:
+                    email = None
+
+                list_of_ip =  read_in_device.list_of_ip(upload_ip)
+                commands = list(commands.split("\r\n"))
+                session = read_in_device.session_in_device(user_tacacs, pass_tacacs, list_of_ip, commands)
+                if isinstance(session, read_in_device.CustomPexpectError): 
+                    raise session
+                elif isinstance(session, read_in_device.NotEnterToDevice):
+                    raise session
+            except read_in_device.IPv4NotValidas as e:
+                return Response({"detail": f"ERROR:  {e}", "status": e.code}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            except read_in_device.CustomPexpectError as e:
+                return Response({"detail": f"ERROR:  {e}", "status": e.code}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            except Exception as e:
+                return Response({"detail": f"ERROR:  {e}", "status": 501}, status=status.HTTP_501_NOT_IMPLEMENTED)
+            else:
+                return Response(session, status=status.HTTP_200_OK)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

@@ -1423,7 +1423,7 @@ class CreateInforme(object):
         self.context = replace_none_recursively(self.context, default_value=[])
         doc.render(self.context)
         doc.save(self.name)
-        return self.name
+        return self.name    
 
 
 def replace_none_recursively(data, default_value=None):

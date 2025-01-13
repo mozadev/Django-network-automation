@@ -335,7 +335,7 @@ class InternetUpgrade(viewsets.ViewSet):
             result = internet_upgrade.to_server(user_tacacs, pass_tacacs, cid_list, now.strftime("%Y%m%d%H%M%S"), commit_pe, commit_acceso, commit_cpe)
 
             if isinstance(result, list):
-                if commit_pe == "N" and commit_acceso == "N" and commit_cpe == "N":
+                if commit_pe == "Y" and commit_acceso == "Y" and commit_cpe == "Y":
                     create_informe = internet_upgrade.CreateInforme(
                         "templates/informes/upgrade_internet_plantilla.docx", 
                         result,

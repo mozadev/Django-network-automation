@@ -67,9 +67,7 @@ class InternetUpgradeSerializer(serializers.Serializer):
     user_tacacs = serializers.CharField(required=True, label="Usuario TACACS")
     pass_tacacs = serializers.CharField(style={'input_type': 'password'}, label="Password TACACS")
     cid_newbw = serializers.FileField(allow_empty_file=False, label="UPLOAD CID y BW", required=True)
-    commit_pe = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear los cambios en el PE?")
-    commit_acceso = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear los cambios en el ACCESO?")
-    commit_cpe = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear los cambios en el CPE?")
+    commit = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear los cambios en los equipos?")
     email = serializers.EmailField(required=True, label="Correo en dónde se enviará los detalles")
 
     def validate_cid_newbw(self, value):

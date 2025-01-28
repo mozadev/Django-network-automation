@@ -10,6 +10,7 @@ import rest.modules.update_vrf.utils as update_vrf
 import rest.modules.suspension.utils as suspension_reconnection
 import rest.modules.upload_anexos.utils as upload_anexos
 import rest.modules.internet_upgrade.utils as internet_upgrade
+import rest.modules.internet_upgrade.claro as internet_upgrade_v2
 import rest.modules.interfaces_status.utils as interfaces_status
 import rest.modules.upgrade_so.utils as upgrade_so
 import rest.modules.read_in_device.utils as read_in_device
@@ -325,18 +326,21 @@ class InternetUpgrade(viewsets.ViewSet):
         if serializer.is_valid():
             user_tacacs = serializer.validated_data["user_tacacs"]
             pass_tacacs = serializer.validated_data["pass_tacacs"]
-            commit_pe = serializer.validated_data["commit_pe"]
-            commit_acceso = serializer.validated_data["commit_acceso"]
-            commit_cpe = serializer.validated_data["commit_cpe"]
+            commit = serializer.validated_data["commit"]
             email = serializer.validated_data["email"]
             cid_newbw = serializer.validated_data["cid_newbw"]
 
             now = datetime.now()
-            cid_list = internet_upgrade.get_cid_newbw(cid_newbw)
-            result = internet_upgrade.to_server(user_tacacs, pass_tacacs, cid_list, now.strftime("%Y%m%d%H%M%S"), commit_pe, commit_acceso, commit_cpe)
-
+            try:
+                cid_list = internet_upgrade_v2.get_cid_newbw(cid_newbw)
+                result = internet_upgrade_v2.proceso(user_tacacs, pass_tacacs, cid_list, now.strftime("%Y%m%d%H%M%S"), commit)
+            except internet_upgrade_v2.CustomPexpectError as e:
+                return Response({"ERROR": f"{e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            except Exception as e:
+                return Response({"ERROR": f"{e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
             if isinstance(result, list):
-                if commit_pe == "Y" and commit_acceso == "Y" and commit_cpe == "Y":
+                if commit == "Y":
                     create_informe = internet_upgrade.CreateInforme(
                         "templates/informes/upgrade_internet_plantilla.docx", 
                         result,

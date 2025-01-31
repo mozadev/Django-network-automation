@@ -501,7 +501,7 @@ class ReadInDeviceViewSet(viewsets.ViewSet):
 
                 list_of_ip =  read_in_device.list_of_ip(upload_ip)
                 commands = list(commands.split("\r\n"))
-                session = read_in_device.session_in_device(user_tacacs, pass_tacacs, list_of_ip, commands)
+                session = read_in_device.session_in_device(user_tacacs, pass_tacacs, list_of_ip, commands, email)
                 if isinstance(session, read_in_device.CustomPexpectError): 
                     raise session
                 elif isinstance(session, read_in_device.NotEnterToDevice):

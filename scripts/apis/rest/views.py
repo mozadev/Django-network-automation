@@ -3,6 +3,7 @@ from rest_framework import permissions, viewsets
 from rest.serializers import GroupSerializer, UserSerializer, ChangeVRFSerializer, ChangeVrfFromExcelSerializer, SuspensionAndReconnectionSerializer
 from rest.serializers import AnexosUploadCsvSerializer, InternetUpgradeSerializer, InterfacesStatusHuaweiSerializer, ReadCorreosPSTSerializer
 from rest.serializers import UpgradeSOHuaweiSwitchSerializer, UploadCorreosTicketsSerializer, UploadSGATicketsSerializer, ReadInDeviceSerializer
+from rest.serializers import CreateInformeSerializer
 from .models import AnexosRegistros, AnexosUpload
 from rest_framework.response import Response
 from rest_framework import status
@@ -13,11 +14,13 @@ import rest.modules.internet_upgrade.utils as internet_upgrade
 import rest.modules.interfaces_status.utils as interfaces_status
 import rest.modules.upgrade_so.utils as upgrade_so
 import rest.modules.read_in_device.utils as read_in_device
+import rest.modules.create_informe.utils as create_informe
 from rest_framework.renderers import TemplateHTMLRenderer
 from rest_framework.reverse import reverse
 from urllib.parse import urlparse
 import pypff
 from striprtf.striprtf import rtf_to_text
+from datetime import datetime
 
 class UserViewSet(viewsets.ModelViewSet):
     """
@@ -514,5 +517,54 @@ class ReadInDeviceViewSet(viewsets.ViewSet):
                 return Response({"detail": f"ERROR:  {e}", "status": 501}, status=status.HTTP_501_NOT_IMPLEMENTED)
             else:
                 return Response(session, status=status.HTTP_200_OK)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+
+class CreateInformeViewSet(viewsets.ViewSet):
+    """
+    Esta es la API para crear informes
+    """
+    serializer_class = CreateInformeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def list(self, request):
+        return Response(status=status.HTTP_200_OK)
+    
+    def create(self, request):
+        serializer = CreateInformeSerializer(data=request.data)
+        if serializer.is_valid():
+            cliente = serializer.validated_data["cliente"]
+            fecha_inicial = serializer.validated_data["fecha_inicial"]
+            fecha_final = serializer.validated_data["fecha_final"]
+            data = serializer.validated_data["data"]
+
+            try:
+                now = datetime.now()
+                #### TAREAS
+                # 1. Validar el excel de ingreso, en caso falle usar raise para lanzar la excepción
+                # 2. Crear el context con los campos correctos
+                result = {
+                    "titulo": f"INFORME DESDE {fecha_inicial} al {fecha_final}",
+                    "cliente": cliente,
+                }
+                # 3. Crear el template 
+                # 5. Renderizarlo
+                crear_informe = create_informe.CreateInforme(
+                    "templates/informes/plantilla_pronatel.docx",
+                    result,
+                    "{fecha}".format(fecha=now.strftime("%Y%m%d%H%M%S")),
+                    )
+                url_informe = crear_informe.create()
+
+                # 6. Retornar la ruta del fichero para hacer la descarga
+                link = reverse("create-informe-list", request=request)
+                parsed_url = urlparse(link)
+                base_url = f"{parsed_url.scheme}://{parsed_url.hostname}:{parsed_url.port}"
+
+            except Exception as e:
+                return Response({"detail": f"ERROR: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            else:
+                return Response({"detail": "EXITOSO", "docx": f"{base_url}/{url_informe}"}, status=status.HTTP_200_OK)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

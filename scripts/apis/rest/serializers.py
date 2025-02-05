@@ -1,6 +1,6 @@
 from django.contrib.auth.models import Group, User
 from rest_framework import serializers
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from .models import AnexosRegistros, AnexosUpload
 
 
@@ -146,3 +146,30 @@ class ReadInDeviceSerializer(serializers.Serializer):
         if value.content_type != 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
             raise serializers.ValidationError("El archivo debe ser de tipo .xlsx")
         return value
+    
+
+class CreateInformeSerializer(serializers.Serializer):
+    cliente = serializers.CharField(required=True, label="Cliente", max_length=100)
+    fecha_inicial = serializers.DateField(initial=date.today(), label="FECHA INICIAL", required=True)
+    fecha_final = serializers.DateField(initial=date.today(), label="FECHA FINAL", required=True)
+    data = serializers.FileField(allow_empty_file=False, label="UPLOAD DATA", required=True)
+
+    def validate_data(self, value):
+        if not value.name.endswith('.xlsx'):
+            raise serializers.ValidationError("Solo se permiten archivos con formato .xlsx")
+        if value.content_type != 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+            raise serializers.ValidationError("El archivo debe ser de tipo .xlsx")
+        return value
+    
+
+    def validate(self, data):
+        fecha_inicial = data.get('fecha_inicial')
+        fecha_final = data.get('fecha_final')
+
+        if fecha_inicial and fecha_final and fecha_inicial > fecha_final:
+            raise serializers.ValidationError({
+                "fecha_inicial": "La fecha inicial no puede ser mayor que la fecha final."
+            })
+
+        return data
+    

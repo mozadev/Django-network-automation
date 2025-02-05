@@ -45,6 +45,7 @@ router.register(r'upgrade-so-huawei-switch', views.UpgradeSOHuaweiSwitchViewSets
 router.register(r'upload-correos-tickets', views.UploadCorreosTicketsViewSet, basename='upload-correos-tickets')
 router.register(r'upload-sga-tickets', views.UploadSGATicketsViewSet, basename='upload-sga-tickets')
 router.register(r'read-in-device', views.ReadInDeviceViewSet, basename='read-in-device')
+router.register(r'create-informe', views.CreateInformeViewSet, basename='create-informe')
 
 # Wire up our API using automatic URL routing.
 # Additionally, we include login URLs for the browsable API.

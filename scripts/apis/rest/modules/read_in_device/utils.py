@@ -7,6 +7,8 @@ from datetime import datetime
 import time
 import zipfile
 import re
+from django.core.mail import EmailMessage
+from jinja2 import Environment, FileSystemLoader
 
 TIME_SLEEP = 0.1
 
@@ -108,13 +110,14 @@ class EnterToCRT(object):
     
 
 class EnterToDevice(object):
-    def __init__(self, child, username, password, ip):
+    def __init__(self, child, username, password, ip, timeout=30):
         self.child = child
         self.username = username
         self.password = password
         self.ip = ip
         self.session = []
         self.path_file = None
+        self.timeout = timeout
     
     def enter(self,):
         try:
@@ -181,9 +184,25 @@ class EnterToDevice(object):
         with open(self.path_file, "w") as file:
             for line in self.session:
                 file.write(f"{line}\n")
+    
+    def exit(self):
+        try:
+            run_step(child=self.child, 
+                    command="quit",
+                    expected_output=r"~\]\$\s*$", 
+                    step_name=f"EXIT {self.ip}", 
+                    timeout=self.timeout, 
+                    device="DEVICE"
+                    )
+                
+        except CustomPexpectError as e:
+            return e
+        else:
+            return self.child
 
 
-def session_in_device(user_tacacs, pass_tacacs, list_of_ip, commands):
+
+def session_in_device(user_tacacs, pass_tacacs, list_of_ip, commands, email):
     try:
         result = []
         sessionCRT = EnterToCRT("media/read_in_device", timeout=30)
@@ -200,6 +219,7 @@ def session_in_device(user_tacacs, pass_tacacs, list_of_ip, commands):
                     terminal_device.send_enter()
                 terminal_device.get_session()
                 terminal_device.save_session(sessionCRT.ruta + "/" + f'{device["ip"]}.txt')
+                terminal_device.exit()
 
             except NotEnterToDevice as e:
                 item["code"] = e.code
@@ -214,7 +234,53 @@ def session_in_device(user_tacacs, pass_tacacs, list_of_ip, commands):
         sessionCRT.listar_txt()
         sessionCRT.comprimir_session("session.zip")
         sessionCRT.exit()
+
+        create_html = CreateHTML("templates/read_in_device.j2", result)
+        html = create_html.create()
+        mail = SendMailHitss(sessionCRT.zipfile_name, email)
+        mail.send_email(html)
+
         return result
     except CustomPexpectError as e:
         return e
 
+
+
+class SendMailHitss(object):
+    def __init__(self, file, to):
+        self.file = file
+        self.to = to
+
+    def send_email(self, body):
+        load_dotenv(override=True)
+
+        email = EmailMessage(
+            subject="API-AUTOSEP: read_in_device",
+            body=body,
+            from_email=os.getenv("EMAIL_AUTOSEP_USER"),
+            to=[self.to],
+        )
+
+        email.content_subtype = "html"
+
+        with open(self.file, 'rb') as f:
+            email.attach('session.zip', f.read(), 'application/zip')
+
+        email.send()
+        return
+    
+
+class CreateHTML(object):
+    def __init__(self, template, data):
+        self.template = template
+        self.data = data
+
+    def create(self):
+        env = Environment(loader=FileSystemLoader("."))
+        template = env.get_template(self.template)
+
+        self.context = {
+            "data": self.data,
+        }
+        self.result =  template.render(self.context)
+        return self.result

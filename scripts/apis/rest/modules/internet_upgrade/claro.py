@@ -986,7 +986,7 @@ class AgentCPE(object):
                 self.commands.extend(
                     [
                         f"interface {self.interface}",
-                        f" bandwidth {self.newbw}",
+                        f" bandwidth {1024 * self.newbw}",
                         f" description {self.description_new}",
                         f" exit",
                     ]

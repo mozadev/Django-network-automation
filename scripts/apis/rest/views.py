@@ -541,15 +541,17 @@ class CreateInformeViewSet(viewsets.ViewSet):
 
             try:
                 now = datetime.now()
-                #### TAREAS
-                # 1. Validar el excel de ingreso, en caso falle usar raise para lanzar la excepción
-                # 2. Crear el context con los campos correctos
+                data_columns_validadas = create_informe.validate_required_columns_from_excel(data)
+
+                fecha_inicial = fecha_inicial.strftime("%d/%m/%Y")
+                fecha_final = fecha_final.strftime("%d/%m/%Y")
+
                 result = {
-                    "titulo": f"INFORME DESDE {fecha_inicial} al {fecha_final}",
+                    "titulo": f"{fecha_inicial} hasta {fecha_final}",
                     "cliente": cliente,
+                    "reportes": create_informe.create_reportes_by_ticket_by_client(data_columns_validadas)
                 }
-                # 3. Crear el template 
-                # 5. Renderizarlo
+              
                 crear_informe = create_informe.CreateInforme(
                     "templates/informes/plantilla_pronatel.docx",
                     result,
@@ -557,7 +559,6 @@ class CreateInformeViewSet(viewsets.ViewSet):
                     )
                 url_informe = crear_informe.create()
 
-                # 6. Retornar la ruta del fichero para hacer la descarga
                 link = reverse("create-informe-list", request=request)
                 parsed_url = urlparse(link)
                 base_url = f"{parsed_url.scheme}://{parsed_url.hostname}:{parsed_url.port}"

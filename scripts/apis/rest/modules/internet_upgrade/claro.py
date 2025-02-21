@@ -986,7 +986,7 @@ class AgentCPE(object):
                 self.commands.extend(
                     [
                         f"interface {self.interface}",
-                        f" bandwidth {self.newbw}",
+                        f" bandwidth {self.newbw * 1024}",
                         f" description {self.description_new}",
                         f" exit",
                     ]
@@ -996,6 +996,7 @@ class AgentCPE(object):
                 self.commands.extend(
                     [
                         "interface {subinterface}".format(subinterface=self.interface),
+                        " bandwidth {newbw} kbps".format(newbw=self.newbw * 1024),
                         " description {description} ".format(description=self.description_new),
                         " quit",
                     ]
@@ -1044,6 +1045,17 @@ class AgentCPE(object):
                     prompt_output = self.child.after.decode("utf-8")
                     run_step(child=self.child, 
                             command="save",
+                            expected_output=r"\[Y\/N\]:",
+                            step_name="CPE - configuration", 
+                            timeout=self.timeout, 
+                            device="CPE"
+                            )
+                    configuration_output = self.child.before.decode("utf-8")
+                    self.view_configuration.extend((prompt_output + configuration_output).splitlines())
+
+                    prompt_output = self.child.after.decode("utf-8")
+                    run_step(child=self.child, 
+                            command="Y",
                             expected_output=r"\n<[\w\-.]+>", 
                             step_name="CPE - configuration", 
                             timeout=self.timeout, 
@@ -1606,6 +1618,17 @@ class AgentACCESO(object):
                     prompt = self.child.after.decode("utf-8")
                     run_step(child=self.child, 
                             command="save",
+                            expected_output=r"\[Y\/N\]:?", 
+                            step_name="ACCESO - configuration", 
+                            timeout=self.timeout, 
+                            device="ACCESO"
+                            )
+                    output = self.child.before.decode("utf-8")
+                    self.view_configuration.extend((prompt + output).splitlines())
+
+                    prompt = self.child.after.decode("utf-8")
+                    run_step(child=self.child, 
+                            command="Y",
                             expected_output=r"\n<[\w\-.]+>", 
                             step_name="ACCESO - configuration", 
                             timeout=self.timeout, 

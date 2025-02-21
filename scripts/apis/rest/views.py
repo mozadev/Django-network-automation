@@ -340,7 +340,7 @@ class InternetUpgrade(viewsets.ViewSet):
                 return Response({"ERROR": f"{e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             if isinstance(result, list):
-                if commit == "Y":
+                if False:
                     create_informe = internet_upgrade.CreateInforme(
                         "templates/informes/upgrade_internet_plantilla.docx", 
                         result,

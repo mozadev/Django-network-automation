@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>jinja2</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column; /* Asegura que todo esté en columnas */
+            align-items: center; /* Centra horizontalmente */
+        }
+
+        .section {
+            width: 60%;
+            margin-bottom: 20px; /* Espaciado entre secciones */
+            text-align: left;
+        }
+
+        h2 {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        table {
+            width: 100%; /* Se ajusta al ancho del contenedor */
+            border-collapse: collapse;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        thead th {
+            border-bottom: 2px solid #dee2e6;
+            text-align: center;
+            padding: 12px;
+            font-weight: bold;
+            background-color: #f1f1f1;
+        }
+
+        tbody td {
+            padding: 12px;
+            text-align: center;
+            border-top: 1px solid #dee2e6;
+        }
+
+        tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <h1>Resumen</h1>
+    <div class="section">
+        <p>
+            En la siguiente tabla están los equipos que fallaron:
+        </p>
+
+        <table>
+            <tr>
+                <th>Equipo</th>
+                <th>STATUS</th>
+            </tr>
+            {% for item in data %}
+                {% if item.code != 200 %}
+                <tr>
+                    <td>{{ item.IPv4 }}</td>
+                    <td>{{ item.detail }}</td>
+                </tr>
+                {% endif %}
+            {% endfor %}
+        </table>
+    </div>
+
+
+    <div class="section">
+        <p>
+            En la siguiente tabla están los equipos exitosos:
+        </p>
+
+        <table>
+            <tr>
+                <th>Equipo</th>
+                <th>STATUS</th>
+            </tr>
+            {% for item in data %}
+                {% if item.code == 200 %}
+                <tr>
+                    <td>{{ item.IPv4 }}</td>
+                    <td>{{ item.detail }}</td>
+                </tr>
+                {% endif %}
+            {% endfor %}
+        </table>
+    </div>
+
+</body>
+</html>

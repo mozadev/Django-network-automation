@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 TIME_SLEEP = 0.1
 
 def get_cid_newbw(file):
-    data = pd.read_excel(file, usecols=["cid", "newbw"])
+    data = pd.read_excel(file, usecols=["cid", "newbw", "action"])
     return data.to_dict(orient="records")
 
 def run_step(child, command, expected_output, step_name, timeout, device):
@@ -194,7 +194,7 @@ class AgentPolo(object):
         
 
 class AgentPE(object):
-    def __init__(self, child, username, password, ip, timeout=30):
+    def __init__(self, child, username, password, ip, action, timeout=30):
         self.child = child
         self.username = username
         self.password = password
@@ -242,6 +242,7 @@ class AgentPE(object):
         self.message = []
         self.send_email_carcir_in = False
         self.send_email_carcir_out = False
+        self.action = action
 
     def enter(self):
         try:
@@ -494,7 +495,10 @@ class AgentPE(object):
                     if self.is_mask30:
                         self.newbw = self.bw_upgrade
                     else:
-                        self.newbw = self.bw + self.bw_upgrade
+                        if self.action == "upgrade":
+                            self.newbw = self.bw + self.bw_upgrade
+                        else:
+                            self.newbw = self.bw
                     self.trafficpolice_new_in = bw_in_found.group("pre") + f"{self.newbw}" + bw_in_found.group("post")
                     self.trafficpolice_new_out = bw_out_found.group("pre") + f"{self.newbw}" + bw_out_found.group("post")
         
@@ -880,6 +884,11 @@ class AgentCPE(object):
                     interface_output = self.child.before.decode("utf-8")
                     self.view_interface = (prompt + interface_output).splitlines()
 
+                    bandwidth_pattern = re.compile(r'bandwidth (?P<bandwidth>\d+)')
+                    bandwidth_find = bandwidth_pattern.search(interface_output)
+                    if bandwidth_find:
+                        self.bandwidth = bandwidth_find.group("bandwidth")
+
                     description_pattern = re.compile(r"description (?P<description>.*)(?=\r\n)")
                     description_find = description_pattern.search(interface_output)
                     if description_find:
@@ -950,7 +959,7 @@ class AgentCPE(object):
                     interface_output = self.child.before.decode("utf-8")
                     self.view_interface = (prompt + interface_output).splitlines()
 
-                    bandwidth_pattern = re.compile(rf'bandwidth (?P<bandwidth>\d+)')
+                    bandwidth_pattern = re.compile(r'bandwidth (?P<bandwidth>\d+)')
                     bandwidth_find = bandwidth_pattern.search(interface_output)
                     if bandwidth_find:
                         self.bandwidth = bandwidth_find.group("bandwidth")
@@ -1706,13 +1715,14 @@ def proceso(user_tacacs, pass_tacacs, cid_list, now, commit):
         for item in cid_list:
             cid = item["cid"]
             newbw = item["newbw"]
+            action = item["action"]
             item["commit"] = commit
 
             enterInPolo = AgentPolo(server, user_tacacs, pass_tacacs, ROUTER_PRIMARIO, cid)
             enterInPolo.get_wan()
             enterInPolo.get_PE()
             
-            enterInPE = AgentPE(server, user_tacacs, pass_tacacs, enterInPolo.pe)
+            enterInPE = AgentPE(server, user_tacacs, pass_tacacs, enterInPolo.pe, action)
             inPE = enterInPE.enter()
             enterInPE.get_values(wan=enterInPolo.wan)
             enterInPE.analizar(upgrade=newbw)

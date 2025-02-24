@@ -313,7 +313,8 @@ class AnexosUploadDashboard2(viewsets.ViewSet):
 
 class InternetUpgrade(viewsets.ViewSet):
     """
-    Se tiene que ingresar un excel con los campos **cid** y **newbw**
+    Se tiene que ingresar un excel con los campos **cid**, **newbw** y un campo **action** la cual puede ser solamente
+    dos valores: _upgrade_ o _downgrade_.
     """
     serializer_class = InternetUpgradeSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -340,7 +341,7 @@ class InternetUpgrade(viewsets.ViewSet):
                 return Response({"ERROR": f"{e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             if isinstance(result, list):
-                if False:
+                if 2 < 1:
                     create_informe = internet_upgrade.CreateInforme(
                         "templates/informes/upgrade_internet_plantilla.docx", 
                         result,

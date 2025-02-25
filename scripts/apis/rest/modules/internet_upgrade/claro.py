@@ -771,6 +771,7 @@ class AgentCPE(object):
         self.ip = cpe
         self.timeout = timeout
         self.os = None
+        self.is_ratelimit = False
     
     def enter(self):
         try:
@@ -894,6 +895,18 @@ class AgentCPE(object):
                     if description_find:
                          self.description = description_find.group("description")
 
+                    ratelimit_pattern = re.compile(r"qos car (?P<type>\w+) cir (?P<cir>\d+) cbs (?P<cbs>\d+) pbs (?P<pbs>\d+) ")
+                    ratelimit_find = ratelimit_pattern.finditer(interface_output)
+                    self.ratelimit = []
+                    for j in ratelimit_find:
+                        item = {}
+                        self.is_ratelimit = True
+                        item["type"] = j.group("type")
+                        item["cir"] = int(j.group("cir"))
+                        item["cbs"] = int(j.group("cbs"))
+                        item["pbs"] = int(j.group("pbs"))
+                        self.ratelimit.append(item)
+
             except CustomPexpectError as e:
                 return e
             else:
@@ -969,6 +982,18 @@ class AgentCPE(object):
                     if description_find:
                         self.description = description_find.group("description")
 
+                    ratelimit_pattern = re.compile(r"rate-limit (?P<type>\w+) cir (?P<cir>\d+) (?P<cbs>\d+) (?P<pbs>\d+) ")
+                    ratelimit_find = ratelimit_pattern.finditer(interface_output)
+                    self.ratelimit = []
+                    for j in ratelimit_find:
+                        item = {}
+                        self.is_ratelimit = True
+                        item["type"] = j.group("type")
+                        item["cir"] = int(j.group("cir"))
+                        item["cbs"] = int(j.group("cbs"))
+                        item["pbs"] = int(j.group("pbs"))
+                        self.ratelimit.append(item)
+
             except CustomPexpectError as e:
                 return e
             else:
@@ -990,6 +1015,10 @@ class AgentCPE(object):
 
     
     def create_commands(self):
+        if self.is_ratelimit and len(self.ratelimit) == 2:
+            type1, cir1, cbs1, pbs1 = "inbound", self.newbw * 1024, self.newbw * 1024 * 0.1875 * 1000, self.newbw * 1024 * 0.1875 * 2 * 1000
+            type2, cir2, cbs2, pbs2 = "outbound", self.newbw * 1024, self.newbw * 1024 * 0.1875 * 1000, self.newbw * 1024 * 0.1875 * 2 * 1000
+
         if self.os == "cisco":
             if hasattr(self, "description_new"):
                 self.commands.extend(
@@ -997,6 +1026,10 @@ class AgentCPE(object):
                         f"interface {self.interface}",
                         f" bandwidth {self.newbw * 1024}",
                         f" description {self.description_new}",
+                        f" no rate-limit inbound" if self.is_ratelimit else None,
+                        f" no rate-limit outbound" if self.is_ratelimit else None,
+                        f" rate-limit {type1} cir {cir1:.0f} {cbs1:.0f} {pbs1:.0f} conform-action transmit exceed-action drop" if self.is_ratelimit else None,
+                        f" rate-limit {type2} cir {cir2:.0f} {cbs2:.0f} {pbs2:.0f} conform-action transmit exceed-action drop" if self.is_ratelimit else None,
                         f" exit",
                     ]
                 )
@@ -1007,9 +1040,15 @@ class AgentCPE(object):
                         "interface {subinterface}".format(subinterface=self.interface),
                         " bandwidth {newbw} kbps".format(newbw=self.newbw * 1024),
                         " description {description} ".format(description=self.description_new),
+                        f" undo qos car inbound" if self.is_ratelimit else None,
+                        f" undo qos car outbound" if self.is_ratelimit else None,
+                        f" qos car {type1} cir {cir1:.0f} cbs {cbs1:.0f} pbs {pbs1:.0f} green pass yellow pass red discard" if self.is_ratelimit else None,
+                        f" qos car {type2} cir {cir2:.0f} cbs {cbs2:.0f} pbs {pbs2:.0f} green pass yellow pass red discard" if self.is_ratelimit else None,
                         " quit",
                     ]
                 )
+        
+        self.commands = [ x for x in self.commands if x is not None]
 
     
     def configuration(self, commit):
@@ -1778,6 +1817,8 @@ def proceso(user_tacacs, pass_tacacs, cid_list, now, commit):
                 "version": enterInCPE.version if hasattr(enterInCPE, "version") else None,
                 "newbw": enterInCPE.newbw if hasattr(enterInCPE, "newbw") else None,
                 "description_new": enterInCPE.description_new if hasattr(enterInCPE, "description_new") else None,
+                "is_ratelimit": enterInCPE.is_ratelimit if hasattr(enterInCPE, "is_ratelimit") else None,
+                "ratelimit": enterInCPE.ratelimit if hasattr(enterInCPE, "ratelimit") else None,
                 "commands": enterInCPE.commands if hasattr(enterInCPE, "commands") else None,
                 "view_interface": enterInCPE.view_interface if hasattr(enterInCPE, "view_interface") else None,
                 "view_configuration": enterInCPE.view_configuration if hasattr(enterInCPE, "view_configuration") else None,
@@ -1788,8 +1829,11 @@ def proceso(user_tacacs, pass_tacacs, cid_list, now, commit):
             enterInACCESO.enter()
             enterInACCESO.get_values(enterInPE.mac)
             enterInACCESO.analizar(newbw)
-            enterInACCESO.create_commands()
-            enterInACCESO.configuration(commit=commit)
+            
+            if not enterInCPE.is_ratelimit:
+                enterInACCESO.create_commands()
+                enterInACCESO.configuration(commit=commit)
+            
             data_ACCESO = {
                 "os": enterInACCESO.os if hasattr(enterInACCESO, "os") else None,
                 "hostname": enterInACCESO.hostname if hasattr(enterInACCESO, "hostname") else None,

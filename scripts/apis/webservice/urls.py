@@ -46,6 +46,11 @@ router.register(r'upload-correos-tickets', views.UploadCorreosTicketsViewSet, ba
 router.register(r'upload-sga-tickets', views.UploadSGATicketsViewSet, basename='upload-sga-tickets')
 router.register(r'read-in-device', views.ReadInDeviceViewSet, basename='read-in-device')
 router.register(r'create-informe', views.CreateInformeViewSet, basename='create-informe')
+router.register(
+      r'upload-sga-tickets-fromFASTAPI-ToClient', 
+    views.UploadSGATicketsfromFASTAPIToClientViewSet, 
+    basename='upload-sga-tickets-fromFASTAPI-ToClient'
+)
 
 # Wire up our API using automatic URL routing.
 # Additionally, we include login URLs for the browsable API.
@@ -55,3 +60,4 @@ urlpatterns = [
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+

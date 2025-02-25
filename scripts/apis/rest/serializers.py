@@ -133,6 +133,14 @@ class UploadSGATicketsSerializer(serializers.Serializer):
         return value
 
 
+class UploadSGATicketsFromFASTAPISerializer(serializers.Serializer):
+    sga_fecha = serializers.DateField(
+        initial=date.today,
+        label="Fecha del SGA",
+        required=True
+    )
+
+
 class ReadInDeviceSerializer(serializers.Serializer):
     user_tacacs = serializers.CharField(required=True, label="Usuario")
     pass_tacacs = serializers.CharField(required=True, style={'input_type': 'password'}, label="Password")

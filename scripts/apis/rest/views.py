@@ -1,9 +1,10 @@
 from django.contrib.auth.models import Group, User
-from rest_framework import permissions, viewsets
+from rest_framework import permissions, viewsets,status
 from rest.serializers import GroupSerializer, UserSerializer, ChangeVRFSerializer, ChangeVrfFromExcelSerializer, SuspensionAndReconnectionSerializer
 from rest.serializers import AnexosUploadCsvSerializer, InternetUpgradeSerializer, InterfacesStatusHuaweiSerializer, ReadCorreosPSTSerializer
 from rest.serializers import UpgradeSOHuaweiSwitchSerializer, UploadCorreosTicketsSerializer, UploadSGATicketsSerializer, ReadInDeviceSerializer
 from rest.serializers import CreateInformeSerializer
+
 from .models import AnexosRegistros, AnexosUpload
 from rest_framework.response import Response
 from rest_framework import status
@@ -479,6 +480,10 @@ class UploadSGATicketsViewSet(viewsets.ViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
 
+
+        
+
+
 class ReadInDeviceViewSet(viewsets.ViewSet):
     """
     El excel debe tener una columna con el nombre **ip**
@@ -525,6 +530,7 @@ class CreateInformeViewSet(viewsets.ViewSet):
     """
     Esta es la API para crear informes
     """
+
     serializer_class = CreateInformeSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -569,3 +575,44 @@ class CreateInformeViewSet(viewsets.ViewSet):
                 return Response({"detail": "EXITOSO", "docx": f"{base_url}/{url_informe}"}, status=status.HTTP_200_OK)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+
+
+
+FASTAPI_URL = "http://your-fastapi-server.com/generate_report/"  # Replace with actual FastAPI URL
+import requests
+import os
+from rest_framework import viewsets, status
+from rest_framework.response import Response
+from django.http import FileResponse
+from django.conf import settings
+from .serializers import UploadSGATicketsFromFASTAPISerializer
+
+class UploadSGATicketsfromFASTAPIToClientViewSet(viewsets.ViewSet):
+    """
+    This API fetch the Excel report from FastAPI and sends it to the user.
+    """
+
+    serializer_class = UploadSGATicketsFromFASTAPISerializer   #  Ensure DRF UI displays the form
+
+    def create(self, request):
+        serializer = UploadSGATicketsFromFASTAPISerializer(data=request.data)
+    
+        if serializer.is_valid():
+            fecha = serializer.validated_data["sga_fecha"]
+
+            response = requests.post(FASTAPI_URL, params={"fecha_inicio":fecha, "fecha_fin": fecha}, stream=True)
+
+            if response.status_code == 200:
+                report_filename = f"sga_report_{fecha}.xlsx"
+                report_path = os.path.join(settings.MEDIA_ROOT, report_filename)
+
+                with open(report_path, "wb") as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                
+                return FileResponse(open(report_path, 'rb'), as_attachment=True, filename=report_filename)
+            return Response({"error": "Failed to fetch report from FastAPI"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            

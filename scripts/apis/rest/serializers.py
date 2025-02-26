@@ -2,6 +2,7 @@ from django.contrib.auth.models import Group, User
 from rest_framework import serializers
 from datetime import datetime, date, timedelta
 from .models import AnexosRegistros, AnexosUpload
+from .models import TicketReport
 
 
 class UserSerializer(serializers.HyperlinkedModelSerializer):
@@ -133,13 +134,6 @@ class UploadSGATicketsSerializer(serializers.Serializer):
         return value
 
 
-class UploadSGATicketsFromFASTAPISerializer(serializers.Serializer):
-    sga_fecha = serializers.DateField(
-        initial=date.today,
-        label="Fecha del SGA",
-        required=True
-    )
-
 
 class ReadInDeviceSerializer(serializers.Serializer):
     user_tacacs = serializers.CharField(required=True, label="Usuario")
@@ -180,4 +174,41 @@ class CreateInformeSerializer(serializers.Serializer):
             })
 
         return data
+
+
+class UploadSGATicketsFromFASTAPISerializer(serializers.Serializer):
+    fecha_incio = serializers.DateField(
+        initial=date.today,
+        label="Fecha de Inicio",
+        required=True,
+        error_messages={
+            'required': 'Este campo es obligatorio.',
+            'invalid': 'Formato de fecha inválido. Use YYYY-MM-DD.'
+        }
+    )
+    fecha_fin = serializers.DateField(
+        initial = date.today,
+        label = "Fecha de Fin",
+        required=True,
+        error_messages={
+            'required': 'Este campo es obligatorio.',
+            'invalid': 'Formato de fecha inválido. Use YYYY-MM-DD.'
+        }
+    )
+
+    def validate(self, data):
+        fecha_inicio = data.get('fecha_inicio')
+        fecha_fin = data.get('fecha_fin')
+    
+        if fecha_inicio and fecha_fin and fecha_inicio > fecha_fin:
+            raise serializers.ValidationError({
+                "Fecha_inicio": "La fecha de inicio no puede ser mayor que la fecha de fin."
+            })
+        return data
+
+
+class TicketReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TicketReport
+        fields = "__all__"
     

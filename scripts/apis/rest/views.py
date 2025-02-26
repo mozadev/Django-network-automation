@@ -578,8 +578,7 @@ class CreateInformeViewSet(viewsets.ViewSet):
         
 
 
-
-FASTAPI_URL = "http://your-fastapi-server.com/generate_report/"  # Replace with actual FastAPI URL
+  # Replace with actual FastAPI URL
 import requests
 import os
 from rest_framework import viewsets, status
@@ -588,31 +587,72 @@ from django.http import FileResponse
 from django.conf import settings
 from .serializers import UploadSGATicketsFromFASTAPISerializer
 
+
 class UploadSGATicketsfromFASTAPIToClientViewSet(viewsets.ViewSet):
     """
-    This API fetch the Excel report from FastAPI and sends it to the user.
+    This API fetches an Excel report from FastAPI and sends it to the user.
     """
 
     serializer_class = UploadSGATicketsFromFASTAPISerializer   #  Ensure DRF UI displays the form
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def list(self, request):
+        return Response(status=status.HTTP_200_OK)
 
     def create(self, request):
-        serializer = UploadSGATicketsFromFASTAPISerializer(data=request.data)
+        """  Handles user request, sends data to FastAPI, and returns the file. """
+
+        serializer = self.serializer_class(data=request.data)
     
-        if serializer.is_valid():
-            fecha = serializer.validated_data["sga_fecha"]
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+        fecha_inicio = serializer.validated_data["fecha_inicio"]
+        fecha_fin = serializer.validated_data["fecha_fin"]
 
-            response = requests.post(FASTAPI_URL, params={"fecha_inicio":fecha, "fecha_fin": fecha}, stream=True)
+        try:
+            with requests.Session() as session:
+                response = session.post(
+                    settings.FASTAPI_URL,
+                    json={
+                        "fecha_inicio": fecha_inicio.isoformat(),
+                        "fecha_fin": fecha_fin.isoformat()
+                    },
+                    stream=True,
+                    timeout=10
+                )
+                
+                response.raise_for_status()  # Raise an exception for HTTP errors
 
-            if response.status_code == 200:
-                report_filename = f"sga_report_{fecha}.xlsx"
+                # Create timestamp for unique filename
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                report_filename = f"sga_report_{fecha_inicio}_to_{fecha_fin}_{timestamp}.xlsx"
                 report_path = os.path.join(settings.MEDIA_ROOT, report_filename)
 
+                # Save the file to MEDIA_ROOT
                 with open(report_path, "wb") as f:
                     for chunk in response.iter_content(chunk_size=8192):
-                        f.write(chunk)
+                        if chunk:  # Filter out keep-alive chunks
+                            f.write(chunk)
                 
-                return FileResponse(open(report_path, 'rb'), as_attachment=True, filename=report_filename)
-            return Response({"error": "Failed to fetch report from FastAPI"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Return the file to the user
+                return FileResponse(
+                    open(report_path, 'rb'), 
+                    as_attachment=True, 
+                    filename=report_filename
+                )
+                
+        except requests.RequestException as e:
+            return Response(
+                {"error": f"Failed to fetch report from FastAPI: {str(e)}"}, 
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Unexpected error: {str(e)}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+            
 
             

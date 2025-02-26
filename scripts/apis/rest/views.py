@@ -3,6 +3,7 @@ from rest_framework import permissions, viewsets
 from rest.serializers import GroupSerializer, UserSerializer, ChangeVRFSerializer, ChangeVrfFromExcelSerializer, SuspensionAndReconnectionSerializer
 from rest.serializers import AnexosUploadCsvSerializer, InternetUpgradeSerializer, InterfacesStatusHuaweiSerializer, ReadCorreosPSTSerializer
 from rest.serializers import UpgradeSOHuaweiSwitchSerializer, UploadCorreosTicketsSerializer, UploadSGATicketsSerializer, ReadInDeviceSerializer
+from rest.serializers import GetTimeOfRebootSerializer
 from .models import AnexosRegistros, AnexosUpload
 from rest_framework.response import Response
 from rest_framework import status
@@ -14,6 +15,7 @@ import rest.modules.internet_upgrade.claro as internet_upgrade_v2
 import rest.modules.interfaces_status.utils as interfaces_status
 import rest.modules.upgrade_so.utils as upgrade_so
 import rest.modules.read_in_device.utils as read_in_device
+import rest.modules.get_time_of_reboot.utils as get_time_of_reboot
 from rest_framework.renderers import TemplateHTMLRenderer
 from rest_framework.reverse import reverse
 from urllib.parse import urlparse
@@ -531,3 +533,41 @@ class ReadInDeviceViewSet(viewsets.ViewSet):
                 return Response(session, status=status.HTTP_200_OK)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+
+class GetTimeOfRebootViewSet(viewsets.ViewSet):
+    """
+    API para obtener el tiempo de inicio del dispositivo Cisco/Huawei.  
+    La API recibe las credendiales y se adjunta un excel con las ip de los dispositivos, 
+    """
+    serializer_class = GetTimeOfRebootSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def list(self, request):
+        return Response(status=status.HTTP_200_OK)
+    def create(self, request):
+        serializer = GetTimeOfRebootSerializer(data=request.data)
+        if serializer.is_valid():
+            try:
+                try:
+                    user_tacacs = serializer.validated_data["user_tacacs"]
+                    pass_tacacs = serializer.validated_data["pass_tacacs"]
+                    upload_ip = serializer.validated_data["upload_ip"]
+                    email = serializer.validated_data["email"]
+                except KeyError:
+                    email = None
+
+                link = reverse("get-time-of-reboot-list", request=request)
+                parsed_url = urlparse(link)
+                base_url = f"{parsed_url.scheme}://{parsed_url.hostname}:{parsed_url.port}"
+
+                list_ips = get_time_of_reboot.list_of_ip(upload_ip)
+                result = get_time_of_reboot.session_in_device(user_tacacs, pass_tacacs, list_ips, email, base_url)
+
+            except Exception as e:
+                return Response({"detail": f"ERROR:  {e}", "status": 501}, status=status.HTTP_501_NOT_IMPLEMENTED)
+            else:
+                return Response(result, status=status.HTTP_200_OK)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+

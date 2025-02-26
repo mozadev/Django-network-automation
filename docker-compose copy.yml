@@ -1,0 +1,16 @@
+version: '3'
+
+services:
+  db:
+    image: postgres:13 
+    volumes:
+      - apis_data:/var/lib/postgresql/data
+    env_file:
+      - ./db.env
+    ports:
+      - 5430:5432
+
+
+
+volumes:
+  apis_data:

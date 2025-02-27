@@ -3,17 +3,19 @@ import ipaddress
 import pexpect
 from dotenv import load_dotenv
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import time
-import zipfile
 import re
 from django.core.mail import EmailMessage
-from jinja2 import Environment, FileSystemLoader
 import csv
 
 
 TIME_SLEEP = 0.1
+PROMP_HUAWEI = r"\n<[\w\-. \(\)]+>$"
+PROMP_CISCO = r"\s[\w\-. \(\)]+#$"
+PROMP_CISCO_SHOW = r"\s[\w\-. \(\)]+#$"
+PROMP_CRT = r"~\]\$\s*$"
 
 def list_of_ip(excel):
     data = pd.read_excel(excel, usecols=["ip"])
@@ -98,7 +100,7 @@ class EnterToCRT(object):
 
             run_step(child=self.child, command=self.password, expected_output=f"user:", step_name="Password", timeout=self.timeout, device="CRT")
             run_step(child=self.child, command=self.crt_user, expected_output=f"address:", step_name="Address CRT", timeout=self.timeout, device="CRT")
-            run_step(child=self.child, command=self.crt_ip, expected_output=r"\]\$", step_name="IP CRT", timeout=self.timeout, device="CRT")
+            run_step(child=self.child, command=self.crt_ip, expected_output=r"~\]\$\s*$", step_name="IP CRT", timeout=self.timeout, device="CRT")
 
             return self.child
         except CustomPexpectError as e:
@@ -129,47 +131,49 @@ class EnterToDevice(object):
                     device="CPE"
                     )
             hh_output = self.child.before.decode("utf-8")
-            hh_pattern = re.compile(r"\n *(?P<loopback>\d+\.\d+\.\d+\.\d+)\s+\w+\s+(?P<sede>\S+)\s+\w+\s+(?P<cid>\d+)\s+")
+            hh_pattern = re.compile(rf"\n *(?P<loopback>{self.ip})\s+\w+\s+(?P<sede>\S+)\s+\w+\s+(?P<cid>\d+)\s+")
             hh_find = hh_pattern.search(hh_output)
             if hh_find:
                 self.loopback = hh_find.group("loopback")
                 self.sede = hh_find.group("sede")
                 self.cid = int(hh_find.group("cid"))
             
-            index_ssh = run_step(child=self.child, 
-                    command=f"ssh -o StrictHostKeyChecking=no {self.username}@{self.ip}",
-                    expected_output=[r"[Pp]assword:", r"~\]\$\s*$"],
-                    step_name="CPE - SSH", 
+            index_telnet = run_step(child=self.child, 
+                    command=f"telnet {self.ip}", 
+                    expected_output=[r"[Uu]sername:", r"~\]\$\s*$"], 
+                    step_name="CPE - TELNET", 
                     timeout=self.timeout, 
                     device="CPE"
                     )
-
-            if index_ssh == 1:
-                index_telnet = run_step(child=self.child, 
-                        command=f"telnet {self.ip}", 
-                        expected_output=[r"[Uu]sername:", r"~\]\$\s*$"], 
-                        step_name="CPE - TELNET", 
+            
+            if index_telnet == 1:
+                index_ssh = run_step(child=self.child, 
+                        command=f"ssh -o StrictHostKeyChecking=no {self.username}@{self.ip}",
+                        expected_output=[r"[Pp]assword:", r"~\]\$\s*$"],
+                        step_name="CPE - SSH", 
                         timeout=self.timeout, 
                         device="CPE"
                         )
-                
-                if index_telnet == 1:
+
+                if index_ssh == 1:
                     return self.child
-                else:
-                    run_step(child=self.child, 
-                            command=self.username,
-                            expected_output=r"[Pp]assword:", 
-                            step_name="CPE - USERNAME", 
-                            timeout=self.timeout,
-                            device="CPE"
-                            )
+            else:
+                run_step(child=self.child, 
+                        command=self.username,
+                        expected_output=r"[Pp]assword:", 
+                        step_name="CPE - USERNAME", 
+                        timeout=self.timeout,
+                        device="CPE"
+                        )
+
             index_os = run_step(child=self.child,                              
                             command=self.password,
-                            expected_output= [r"\s[\w\-.]+>", r"\s[\w\-.]+#", r"\n<[\w\-.]+>"],
+                            expected_output= [PROMP_CISCO_SHOW, PROMP_CISCO, PROMP_HUAWEI],
                             step_name="CPE - PASSWORD", 
                             timeout=self.timeout,
                             device="CPE"
                             )
+
             if index_os == 0:
                 self.os = "cisco"
                 run_step(child=self.child, 
@@ -203,7 +207,7 @@ class EnterToDevice(object):
             if self.os == "huawei":
                 run_step(child=self.child, 
                         command=f"screen-length 0 temporary",
-                        expected_output=r"\n<[\w\-.]+>", 
+                        expected_output=PROMP_HUAWEI, 
                         step_name="CPE - terminal length", 
                         timeout=self.timeout,
                         device="CPE"
@@ -211,7 +215,7 @@ class EnterToDevice(object):
 
                 run_step(child=self.child, 
                         command=f"display version",
-                        expected_output=r"\n<[\w\-.]+>", 
+                        expected_output=PROMP_HUAWEI, 
                         step_name="CPE - VERSION", 
                         timeout=self.timeout, 
                         device="CPE"
@@ -224,7 +228,7 @@ class EnterToDevice(object):
 
                 run_step(child=self.child, 
                         command=f"display current-configuration",
-                        expected_output=r"\n<[\w\-.]+>", 
+                        expected_output=PROMP_HUAWEI, 
                         step_name="CPE - HOSTNAME", 
                         timeout=self.timeout, 
                         device="CPE"
@@ -238,14 +242,14 @@ class EnterToDevice(object):
             elif self.os == "cisco":
                 run_step(child=self.child, 
                         command="terminal length 0",
-                        expected_output=r"\s[\w\-.]+#", 
+                        expected_output=PROMP_CISCO, 
                         step_name="CPE - terminal length", 
                         timeout=self.timeout,
                         device="CPE"
                         )
                 run_step(child=self.child, 
                         command="show version",
-                        expected_output=r"\s[\w\-.]+#$", 
+                        expected_output=PROMP_CISCO, 
                         step_name="CPE - version", 
                         timeout=self.timeout,
                         device="CPE"
@@ -263,7 +267,7 @@ class EnterToDevice(object):
 
                 run_step(child=self.child, 
                         command=f"show run | include hostname",
-                        expected_output=r"\s[\w\-\.]+#$", 
+                        expected_output=PROMP_CISCO, 
                         step_name="CPE - hostname", 
                         timeout=self.timeout,
                         device="CPE"
@@ -283,7 +287,7 @@ class EnterToDevice(object):
 
                 run_step(child=self.child, 
                         command=f"display version",
-                        expected_output=r"\n<[\w\-.]+>", 
+                        expected_output=PROMP_HUAWEI, 
                         step_name="CPE - VERSION", 
                         timeout=self.timeout, 
                         device="CPE"
@@ -318,7 +322,7 @@ class EnterToDevice(object):
 
                 run_step(child=self.child, 
                         command="show version | include uptime",
-                        expected_output=r"\s[\w\-.]+#$", 
+                        expected_output=PROMP_CISCO, 
                         step_name="CPE - version", 
                         timeout=self.timeout,
                         device="CPE"
@@ -358,7 +362,7 @@ class EnterToDevice(object):
                 if self.os == "huawei":
                     run_step(child=self.child,
                             command="quit",
-                            expected_output=r"~\]\$\s*$",
+                            expected_output=PROMP_CRT,
                             step_name=f"EXIT {self.ip}",
                             timeout=self.timeout,
                             device="DEVICE"
@@ -366,7 +370,7 @@ class EnterToDevice(object):
                 elif self.os == "cisco":
                     run_step(child=self.child,
                             command="exit",
-                            expected_output=r"~\]\$\s*$",
+                            expected_output=PROMP_CRT,
                             step_name=f"EXIT {self.ip}",
                             timeout=self.timeout,
                             device="DEVICE"
@@ -391,7 +395,6 @@ def get_date(now, args):
     if not hour: hour = 0
     if not mins: mins = 0
 
-    #delta = timedelta(days=days, seconds=0, microseconds=0, milliseconds=0, minutes=mins, hours=hour, weeks=week)    
     delta = relativedelta(years=year, days=days, minutes=mins, hours=hour, weeks=week)
     return now - delta
 

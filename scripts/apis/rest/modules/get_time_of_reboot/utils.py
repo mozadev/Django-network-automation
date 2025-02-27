@@ -296,10 +296,10 @@ class EnterToDevice(object):
                 uptime_output = self.child.before.decode("utf-8")
 
                 year_pattern = re.compile(rf"{self.version} .* (?P<year>\d+) year")
-                week_pattern = re.compile(rf"{self.version} .* (?P<week>\d+) weeks")
-                days_pattern = re.compile(rf"{self.version} .* (?P<day>\d+) days")
+                week_pattern = re.compile(rf"{self.version} .* (?P<week>\d+) week")
+                days_pattern = re.compile(rf"{self.version} .* (?P<day>\d+) day")
                 hour_pattern = re.compile(rf"{self.version} .* (?P<hour>\d+) hour")
-                mins_pattern = re.compile(rf"{self.version} .* (?P<min>\d+) minutes")
+                mins_pattern = re.compile(rf"{self.version} .* (?P<min>\d+) minute")
 
                 year_find = year_pattern.search(uptime_output)
                 week_find = week_pattern.search(uptime_output)
@@ -331,10 +331,10 @@ class EnterToDevice(object):
                 uptime_output = self.child.before.decode("utf-8")
 
                 year_pattern = re.compile(rf"{self.hostname} .* (?P<year>\d+) year")
-                week_pattern = re.compile(rf"{self.hostname} .* (?P<week>\d+) weeks")
-                days_pattern = re.compile(rf"{self.hostname} .* (?P<day>\d+) days")
+                week_pattern = re.compile(rf"{self.hostname} .* (?P<week>\d+) week")
+                days_pattern = re.compile(rf"{self.hostname} .* (?P<day>\d+) day")
                 hour_pattern = re.compile(rf"{self.hostname} .* (?P<hour>\d+) hour")
-                mins_pattern = re.compile(rf"{self.hostname} .* (?P<min>\d+) minutes")
+                mins_pattern = re.compile(rf"{self.hostname} .* (?P<min>\d+) minute")
 
                 year_find = year_pattern.search(uptime_output)
                 week_find = week_pattern.search(uptime_output)

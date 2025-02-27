@@ -563,11 +563,13 @@ class GetTimeOfRebootViewSet(viewsets.ViewSet):
 
                 list_ips = get_time_of_reboot.list_of_ip(upload_ip)
                 result = get_time_of_reboot.session_in_device(user_tacacs, pass_tacacs, list_ips, email, base_url)
-
             except Exception as e:
                 return Response({"detail": f"ERROR:  {e}", "status": 501}, status=status.HTTP_501_NOT_IMPLEMENTED)
             else:
-                return Response(result, status=status.HTTP_200_OK)
+                if isinstance(result, dict):
+                    return Response(result, status=status.HTTP_200_OK)
+                else:
+                    return Response({"detail": f"ERROR:  {result}", "status": 500}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

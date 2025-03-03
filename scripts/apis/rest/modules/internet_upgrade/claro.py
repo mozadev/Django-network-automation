@@ -1386,7 +1386,7 @@ class AgentACCESO(object):
                     trafficpolice_in_output = self.child.before.decode("utf-8")
                     self.view_trafficpolice_in = (prompt + trafficpolice_in_output).splitlines()
 
-                    classifier_in_pattern = re.compile(r'classifier (?P<classifier>\w+) behavior (?P<behavior>\w+)')
+                    classifier_in_pattern = re.compile(r'classifier (?P<classifier>\S+_INTERNET_\S+) behavior (?P<behavior>\w+)', flags=re.IGNORECASE)
                     classifier_in_find = classifier_in_pattern.search(trafficpolice_in_output)
                     if classifier_in_find:
                         self.classifier_in = classifier_in_find.group("classifier")
@@ -1404,7 +1404,7 @@ class AgentACCESO(object):
                     trafficpolice_out_output = self.child.before.decode("utf-8")
                     self.view_trafficpolice_out = (prompt + trafficpolice_out_output).splitlines()
 
-                    classifier_out_pattern = re.compile(r'classifier (?P<classifier>\w+) behavior (?P<behavior>\w+)')
+                    classifier_out_pattern = re.compile(r'classifier (?P<classifier>\S+_INTERNET_\S+) behavior (?P<behavior>\w+)', flags=re.IGNORECASE)
                     classifier_out_find = classifier_out_pattern.search(trafficpolice_out_output)
                     if classifier_out_find:
                         self.classifier_out = classifier_out_find.group("classifier")

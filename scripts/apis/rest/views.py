@@ -559,7 +559,7 @@ class CreateInformeViewSet(viewsets.ViewSet):
                 }
               
                 crear_informe = create_informe.CreateInforme(
-                    "templates/informes/plantilla_pronatel.docx",
+                    "templates/informes/plantilla_pronatel_logo.docx",
                     result,
                     "{fecha}".format(fecha=now.strftime("%Y%m%d%H%M%S")),
                     )

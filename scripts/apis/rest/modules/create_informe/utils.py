@@ -192,6 +192,8 @@ def create_reportes_by_ticket_by_client(df):
     df_sorted['fecha_generacion'] = df_sorted['fecha_generacion'].dt.strftime('%d/%m/%Y %H:%M')
     df_sorted['interrupcion_fin'] = df_sorted['interrupcion_fin'].dt.strftime('%d/%m/%Y %H:%M')
 
+    df_sorted['tipificacion_problema'] = df_sorted['tipificacion_problema'].str.split('-').str[0].str.strip()
+
     return df_sorted.to_dict(orient="records")
 
 

@@ -104,17 +104,17 @@ def validate_required_columns_from_excel(excel_file):
     """
   
     required_columns = [
-        'nro_incidencia',
-        'canal_ingreso',
-        'interrupcion_inicio', 
-        'fecha_generacion',
-        'interrupcion_fin', 
-        'cid', 'tipo_caso',
-        'tipificacion_problema',
+        'nro_incidencia', # ticket
+        'canal_ingreso', # tipo generacion ticket
+        'interrupcion_inicio',  # fecha/hora interrupcion
+        'fecha_generacion', # fecha/hora generacion
+        'interrupcion_fin',  # fecha/ hora subsanacion
+        'cid', 'tipo_caso', 
+        'tipificacion_problema', #averia
         'it_determinacion_de_la_causa','it_medidas_tomadas',
-        'it_conclusiones', 
-        'tiempo_interrupcion',
-        'tipificacion_interrupcion' 
+        'it_conclusiones', # recomendaciones
+        'tiempo_interrupcion', #tiempo subsanacion efectivo
+        'tipificacion_interrupcion' # tiempo de indisponibilidad
         
     ]
     try:
@@ -170,9 +170,9 @@ def create_reportes_by_ticket_by_client(df):
     """
 
     df['canal_ingreso'] = df['canal_ingreso'].replace({
-        'e-mail': 'Reclamo',
-        'Telefono': 'Reclamo',
-        'Interno': 'Reclamo'
+        'e-mail': 'Reportado por el usuario',
+        'Telefono': 'Reportado por el usuario',
+        'Interno': 'Reportado por el usuario'
        })
     
     df['fecha_hora_solicitud'] = np.where(df['canal_ingreso'] == 'Proactivo', '-', 'Por definir') 

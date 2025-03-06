@@ -109,12 +109,16 @@ def validate_required_columns_from_excel(excel_file):
         'interrupcion_inicio',  # fecha/hora interrupcion
         'fecha_generacion', # fecha/hora generacion
         'interrupcion_fin',  # fecha/ hora subsanacion
-        'cid', 'tipo_caso', 
+        'cid', # CID
+        'tipo_caso', # Tipo Caso
         'tipificacion_problema', #averia
-        'it_determinacion_de_la_causa','it_medidas_tomadas',
-        'it_conclusiones', # recomendaciones
+        'it_determinacion_de_la_causa', # DETERMINACION DE LA CAUSA
+        'it_medidas_tomadas', # MEDIDAS CORRECTIVAS Y/O PREVENTIVAS TOMADAS
+        'it_conclusiones', # RECOMENDACIONES
         'tiempo_interrupcion', #tiempo subsanacion efectivo
-        'tipificacion_interrupcion' # tiempo de indisponibilidad
+        'tipificacion_interrupcion', # tiempo de indisponibilidad,
+        'tipificacion_tipo' # ATRIBUIBLE
+
         
     ]
     try:
@@ -196,7 +200,12 @@ def create_reportes_by_ticket_by_client(df):
     
     df_sorted["tipificacion_problema"] = df_sorted["tipificacion_problema"].apply(
     lambda x: "PROBLEMA DE ENERGIA COMERCIAL EN SITE/POP" if "PROBLEMA DE ENERGIA COMERCIAL EN SITE/POP" in x else x
-)
+)   
+    
+    df_sorted['tipificacion_tipo'] = df_sorted['tipificacion_tipo'].replace({
+        'CLARO - DEGRADACION': 'CLARO', 
+        'TERCEROS - CORTE' : 'TERCEROS'
+       })
 
     return df_sorted.to_dict(orient="records")
 

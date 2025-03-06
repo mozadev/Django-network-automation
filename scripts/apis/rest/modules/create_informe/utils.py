@@ -193,6 +193,10 @@ def create_reportes_by_ticket_by_client(df):
     df_sorted['interrupcion_fin'] = df_sorted['interrupcion_fin'].dt.strftime('%d/%m/%Y %H:%M')
 
     df_sorted['tipificacion_problema'] = df_sorted['tipificacion_problema'].str.split('-').str[0].str.strip()
+    
+    df_sorted["tipificacion_problema"] = df_sorted["tipificacion_problema"].apply(
+    lambda x: "PROBLEMA DE ENERGIA COMERCIAL EN SITE/POP" if "PROBLEMA DE ENERGIA COMERCIAL EN SITE/POP" in x else x
+)
 
     return df_sorted.to_dict(orient="records")
 

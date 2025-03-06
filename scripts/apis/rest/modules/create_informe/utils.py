@@ -1,7 +1,9 @@
 from docxtpl import DocxTemplate
+from pathlib import Path
 import pandas as pd
 import re
 import numpy as np
+import os
 
 class CreateInforme(object):
 
@@ -206,6 +208,21 @@ def create_reportes_by_ticket_by_client(df):
         'CLARO - DEGRADACION': 'CLARO', 
         'TERCEROS - CORTE' : 'TERCEROS'
        })
+   
+    
+    
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+    file_path_sedes = BASE_DIR / "media" / "pronatel" / "sedes" / "RELACIÓN DE CADs CON CID.xlsx"
+
+    if not  file_path_sedes.exists():
+            raise FileNotFoundError(f" File not found {file_path_sedes}")
+    
+    df_sedes_by_cid = pd.read_excel(file_path_sedes)
+
+    df_sorted["cid"] = df_sorted["cid"].astype(str)  
+    df_sedes_by_cid["cid"] = df_sedes_by_cid["cid"].astype(str)
+    
+    df_sorted = df_sorted.merge(df_sedes_by_cid, on="cid", how="left")
 
     return df_sorted.to_dict(orient="records")
 

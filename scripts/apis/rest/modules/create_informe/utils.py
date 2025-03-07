@@ -3,7 +3,6 @@ from pathlib import Path
 import pandas as pd
 import re
 import numpy as np
-import os
 
 class CreateInforme(object):
 
@@ -14,97 +13,54 @@ class CreateInforme(object):
 
     def create(self):
         doc = DocxTemplate(self.template)
+       
 
         self.context = {
             "titulo": self.data["titulo"],
             "cliente": self.data["cliente"],
-            "reportes": self.apply_centered_format(self.data["reportes"]) 
+            "reportes": self.apply_clean_format(self.data["reportes"]) 
 
         }
         doc.render(self.context)
         doc.save(self.name)
         return self.name
 
-    def apply_centered_format(self, reportes):
-        """
-        Aplica centrado en las dos últimas líneas de la columna 'it_medidas_tomadas' dentro de cada ticket.
-        """
+
+    def apply_clean_format(self, reportes):
+
         # Se utiliza una list comprehension para generar una nueva lista de reportes.
         # Si en un reporte existe 'it_medidas_tomadas' y es una cadena, se actualiza esa clave.
         return [
-                {**reporte, "it_medidas_tomadas": self.center_last_lines(reporte["it_medidas_tomadas"])}
+                {**reporte,
+                  "it_medidas_tomadas": self.remove_last_lines(
+                    reporte["it_medidas_tomadas"]
+                    )
+                }
                 if "it_medidas_tomadas" in reporte and isinstance(reporte["it_medidas_tomadas"],str) 
                 else reporte
                 for reporte in reportes
             ]
-
-    def center_last_lines(self, text):
-            """
-            Centra solo las dos últimas líneas del texto en la columna 'it_medidas_tomadas'.
-            """
-            lines = text.split("\n")  
-
-            if len(lines) >= 3:
-                # Si la antepenúltima línea no está vacía (después de eliminar espacios) se inserta una línea vacía antes de la penutima
-                 if lines[-3].strip():  
-                    lines.insert(-2, "")
-                # Se centran las dos últimas líneas después de limpiar los espacios internos
-                 lines[-2:] = [self.clean_spaces(line).center(100) for line in lines[-2:]]
-
-            return "\n".join(lines)
-
-    def clean_spaces(self, text):
+    
+    def remove_last_lines(self, text):
+        """
+        Removes the last two lines if they contain dates or specific keywords.
+        """
        
-       """
-       Quita espacios al inicio y al final, y reduce múltiples espacios internos a uno solo.
-       """
+        DATE_PATTERN = re.compile(
+         r"(?i)^\s*fecha\s*y\s*hora\s*(de\s*)?(inicio|fin)?:?\s*\d{1,2}/\d{1,2}/\d{4}\s*\d{1,2}:\d{2}\s*$"
+        )
+        lines = text.split("\n") 
 
-       return re.sub(r'\s+', ' ', text.strip())  # Reemplaza múltiples espacios con uno solo y elimina espacios al inicio/final
+        while lines and DATE_PATTERN.search(lines[-1].strip()):
+            lines.pop()
+
+        cleaned_text = "\n".join(lines)
+
+        return cleaned_text 
+
 
 def validate_required_columns_from_excel(excel_file):
-    """
-    Valida que el archivo Excel contenga las columnas requeridas y retorna un DataFrame limpio.
-
-    Esta función realiza las siguientes operaciones:
-    
-    1. Lee el archivo Excel utilizando pandas y el motor "openpyxl".  
-       Si ocurre algún error al leer el archivo, se lanza un ValueError con un mensaje descriptivo.
-       
-    2. Elimina espacios en blanco de los nombres de las columnas leídas.
-    
-    3. Verifica que el DataFrame contenga las siguientes columnas requeridas:   
-       - 'nro_incidencia'            
-       - 'canal_ingreso'                  
-       - 'interrupcion_inicio'            
-       - 'fecha_generacion'                 
-       - 'interrupcion_fin'                 
-       - 'cid'
-       - 'tipo_caso'
-       - 'tipificacion_problema'           
-       - 'it_determinacion_de_la_causa'
-       - 'it_medidas_tomadas'
-       - 'it_conclusiones'                  
-       - 'tiempo_interrupcion'              
-       - 'tipificacion_interrupcion'        
-       
-       Si faltan algunas de estas columnas, se lanza un ValueError con un mensaje indicando
-       cuáles son las columnas ausentes.
-       
-    4. Extrae del DataFrame únicamente las columnas requeridas, limpia el contenido de cada celda 
-       aplicando la función `clean_texto_from_celdas` y reemplaza los valores nulos por "-".
-
-    Parameters:
-        excel_file
-
-    Returns:
-        pandas.DataFrame: DataFrame que contiene únicamente las columnas requeridas, con el texto de
-        las celdas procesado y sin valores nulos.
-
-    Raises:
-        ValueError: Si ocurre algún error al leer el archivo Excel o si faltan columnas requeridas.
-
-    """
-  
+   
     required_columns = [
         'nro_incidencia', # ticket
         'canal_ingreso', # tipo generacion ticket
@@ -146,34 +102,6 @@ def validate_required_columns_from_excel(excel_file):
     return df_clean
 
 def create_reportes_by_ticket_by_client(df):
-    """
-    Genera reportes por tickets a partir de un DataFrame.
-
-    La función realiza las siguientes operaciones:
-    
-    1. Reemplaza ciertos valores en la columna 'canal_ingreso' para agrupar entradas bajo la categoría 'Reclamo'.
-    2. Crea la columna 'fecha_hora_solicitud' basada en el valor de 'canal_ingreso': 
-       si el valor es 'Proactivo', se asigna '-', de lo contrario 'Por definir'.
-    3. Asigna valores constantes a las siguientes columnas:
-       - 'fecha_hora_llegada_personal': "-"
-       - 'tiempo_llegada_personal': "-"
-       - 'horas_excedidas_plazo_reparacion_bases': 0
-       - 'descripcion_problema': Mensaje fijo indicando la pérdida de gestión del servicio.
-    4. Convierte las columnas de fecha ('interrupcion_inicio', 'fecha_generacion', 'interrupcion_fin') a tipo datetime,
-       gestionando errores mediante 'coerce'.
-    5. Ordena el DataFrame por la columna 'interrupcion_inicio' en orden ascendente.
-    6. Formatea las columnas de fecha al formato '%d/%m/%Y %H:%M:%S'.
-    7. Retorna el DataFrame transformado como una lista de diccionarios.
-
-    Parameters:
-        df (pandas.DataFrame): DataFrame con los datos originales del reporte.
-
-    Returns:
-        list: Lista de diccionarios, donde cada diccionario representa una fila del DataFrame transformado.
-
-    Raises:
-        Exception: Puede lanzar excepciones si faltan columnas requeridas o si ocurre un error durante la conversión de fechas.
-    """
 
     df['canal_ingreso'] = df['canal_ingreso'].replace({
         'e-mail': 'Reportado por el usuario',
@@ -209,7 +137,6 @@ def create_reportes_by_ticket_by_client(df):
         'TERCEROS - CORTE' : 'TERCEROS'
        })
    
-    
     
     BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
     file_path_sedes = BASE_DIR / "media" / "pronatel" / "sedes" / "RELACIÓN DE CADs CON CID.xlsx"

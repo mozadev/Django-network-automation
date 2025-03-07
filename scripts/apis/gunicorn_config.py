@@ -1,7 +1,11 @@
 bind = "0.0.0.0:9000"
-workers = 2
-threads = 4
+workers = 4
+threads = 8
 max_requests = 1000
+max_requests_jitter = 50
 worker_class = "gthread"
+timeout = 120
+keepalive = 5
 accesslog = "media/gunicorn_access.log"
 errorlog = "media/gunicorn_error.log"
+loglevel = "info" 

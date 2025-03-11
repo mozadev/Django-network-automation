@@ -15,8 +15,6 @@ class AnexosRegistros(models.Model):
     first = models.BooleanField(null=False, default=False)
     last = models.BooleanField(null=False, default=False)
 
-class TicketReport(models.Model):
-    ticket_id = models.CharField(max_length=50, unique=False)
 
 
     

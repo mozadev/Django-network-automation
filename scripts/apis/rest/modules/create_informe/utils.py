@@ -14,7 +14,6 @@ class CreateInforme(object):
     def create(self):
         doc = DocxTemplate(self.template)
        
-
         self.context = {
             "titulo": self.data["titulo"],
             "cliente": self.data["cliente"],

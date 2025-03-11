@@ -178,6 +178,3 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.getenv("EMAIL_AUTOSEP_USER")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_AUTOSEP_PASS")
-
-
-FASTAPI_URL = "http://your-fastapi-server.com/generate_report/"

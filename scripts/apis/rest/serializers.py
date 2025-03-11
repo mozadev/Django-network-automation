@@ -2,7 +2,6 @@ from django.contrib.auth.models import Group, User
 from rest_framework import serializers
 from datetime import datetime, date, timedelta
 from .models import AnexosRegistros, AnexosUpload
-from .models import TicketReport
 
 
 class UserSerializer(serializers.HyperlinkedModelSerializer):

@@ -11,7 +11,7 @@ from django.core.mail import EmailMessage
 import csv
 
 
-TIME_SLEEP = 0.1
+TIME_SLEEP = 0.2
 PROMP_HUAWEI = r"\n<[\w\-. \(\)]+>$"
 PROMP_CISCO = r"\s[\w\-. \(\)]+#$"
 PROMP_CISCO_SHOW = r"\s[\w\-. \(\)]+#$"

@@ -5,8 +5,13 @@ import time
 import re
 import pandas as pd
 from dotenv import load_dotenv
+import ipaddress
 
-TIME_SLEEP = 0.1
+TIME_SLEEP = 0.2
+PROMP_HUAWEI = r"\n<[\w\-. \(\)]+>$"
+PROMP_CISCO = r"\s[\w\-. \(\)]+#$"
+PROMP_CISCO_SHOW = r"\s[\w\-. \(\)]+#$"
+PROMP_CRT = r"~\]\$\s*$"
 
 def get_cid_newbw(file):
     data = pd.read_excel(file, usecols=["cid", "newbw", "action"])
@@ -40,7 +45,13 @@ def is_mascara30(mascara):
         return True
     else:
         return False
-    
+
+def is_wanprivade(wan):
+    try:
+        return ipaddress.ip_address(wan).exploded.startswith("10.31.")
+    except ValueError:
+        return False
+
 
 class CustomPexpectError(Exception):
     def __init__(self, step, message, code, device):
@@ -123,6 +134,7 @@ class AgentPolo(object):
         self.wan = None
         self.timeout = timeout
         self.pe = None
+        self.is_wanprivade = None
 
     def get_wan(self):
         try:
@@ -140,13 +152,14 @@ class AgentPolo(object):
 
             if wan_pattern_find:
                 self.wan = wan_pattern_find.group("wan")
+                self.is_wanprivade = is_wanprivade(self.wan)
             return self.child
         except CustomPexpectError as e:
             return e
 
     def get_PE(self):
         try:
-            if self.wan:
+            if self.wan and hasattr(self, "is_wanprivade"):
                 run_step(child=self.child,
                         command=f"ssh -o StrictHostKeyChecking=no {self.username}@{self.hostname}", 
                         expected_output=r"[Pp]assword:", 
@@ -168,18 +181,33 @@ class AgentPolo(object):
                         timeout=self.timeout, 
                         device="POLO"
                         )
-                run_step(child=self.child, 
-                        command=f"display ip routing-table {self.wan}",
-                        expected_output=r"\n<[\w\-.]+>", 
-                        step_name="POLO - ROUTING-TABLE", 
-                        timeout=self.timeout, 
-                        device="POLO"
-                        )
-                pe_output = self.child.before.decode("utf-8")
-                pe_pattern = re.compile(r' +(?P<pe>\d+\.\d+\.\d+\.\d+)  +')
-                pe_pattern_find = pe_pattern.search(pe_output)
-                if pe_pattern_find:
-                    self.pe = pe_pattern_find.group("pe")
+                
+                if self.is_wanprivade:
+                    run_step(child=self.child, 
+                            command=f"display bgp routing-table {self.wan}",
+                            expected_output=r"\n<[\w\-.]+>", 
+                            step_name="POLO - ROUTING-TABLE", 
+                            timeout=self.timeout, 
+                            device="POLO"
+                            )
+                    pe_output = self.child.before.decode("utf-8")
+                    pe_pattern = re.compile(r", best,.*\n Originator: (?P<pe>\d+\.\d+\.\d+\.\d+)")
+                    pe_pattern_find = pe_pattern.search(pe_output)
+                    if pe_pattern_find:
+                        self.pe = pe_pattern_find.group("pe")
+                else:
+                    run_step(child=self.child, 
+                            command=f"display ip routing-table {self.wan}",
+                            expected_output=r"\n<[\w\-.]+>", 
+                            step_name="POLO - ROUTING-TABLE", 
+                            timeout=self.timeout, 
+                            device="POLO"
+                            )
+                    pe_output = self.child.before.decode("utf-8")
+                    pe_pattern = re.compile(r' +(?P<pe>\d+\.\d+\.\d+\.\d+)  +')
+                    pe_pattern_find = pe_pattern.search(pe_output)
+                    if pe_pattern_find:
+                        self.pe = pe_pattern_find.group("pe")
 
                 run_step(child=self.child, 
                         command="quit", 
@@ -194,7 +222,7 @@ class AgentPolo(object):
         
 
 class AgentPE(object):
-    def __init__(self, child, username, password, ip, action, timeout=30):
+    def __init__(self, child, username, password, ip, action, is_wanprivade, timeout=30):
         self.child = child
         self.username = username
         self.password = password
@@ -243,12 +271,31 @@ class AgentPE(object):
         self.send_email_carcir_in = False
         self.send_email_carcir_out = False
         self.action = action
+        self.is_wanprivade = is_wanprivade
 
     def enter(self):
         try:
             if self.ip:
+                if self.is_wanprivade:
+                    run_step(child=self.child, 
+                            command=f"hh {self.ip} | sed -E 's/^#//g' | grep -E \'\\b{self.ip}\\b\'", 
+                            expected_output=PROMP_CRT,
+                            step_name="PE - HH",
+                            timeout=self.timeout,
+                            device="PE"
+                            )
+                    device_output = self.child.before.decode("utf-8")
+                    device_pattern = re.compile(rf"\n *{self.ip}\s+\S+\s+(?P<device>\S+)")
+                    device_pattern_find = device_pattern.search(device_output)
+                    if device_pattern_find:
+                        self.device = device_pattern_find.group("device")
+                    else:
+                        self.device = None
+                else:
+                    self.device = self.ip
+
                 run_step(child=self.child, 
-                        command=f"ssh -o StrictHostKeyChecking=no {self.username}@{self.ip}", 
+                        command=f"ssh -o StrictHostKeyChecking=no {self.username}@{self.device}", 
                         expected_output=r"[Pp]assword:", 
                         step_name="PE - SSH", 
                         timeout=self.timeout, 
@@ -311,7 +358,7 @@ class AgentPE(object):
                         device="PE"
                         )
                 routingtable_output = self.child.before.decode("utf-8")
-                routingtable_pattern = re.compile(r'\s*\S+ +\S+ +\S+ +\S+ +\S+ +\d+\.\d+\.\d+\.\d+ +(?P<subinterface>\S+)')
+                routingtable_pattern = re.compile(r'\d+\.\d+\.\d+\.\d+\/\d+.*\d+\.\d+\.\d+\.\d+ +(?P<subinterface>\S+)')
                 routingtable_pattern_find = routingtable_pattern.search(routingtable_output)
                 if routingtable_pattern_find:
                     self.subinterface = routingtable_pattern_find.group("subinterface")
@@ -1386,7 +1433,7 @@ class AgentACCESO(object):
                     trafficpolice_in_output = self.child.before.decode("utf-8")
                     self.view_trafficpolice_in = (prompt + trafficpolice_in_output).splitlines()
 
-                    classifier_in_pattern = re.compile(r'classifier (?P<classifier>\S+_INTERNET_\S+) behavior (?P<behavior>\w+)', flags=re.IGNORECASE)
+                    classifier_in_pattern = re.compile(r'classifier (?P<classifier>[\S_]*?INTERNET[_\S]*?) behavior (?P<behavior>\w+)', flags=re.IGNORECASE)
                     classifier_in_find = classifier_in_pattern.search(trafficpolice_in_output)
                     if classifier_in_find:
                         self.classifier_in = classifier_in_find.group("classifier")
@@ -1404,7 +1451,7 @@ class AgentACCESO(object):
                     trafficpolice_out_output = self.child.before.decode("utf-8")
                     self.view_trafficpolice_out = (prompt + trafficpolice_out_output).splitlines()
 
-                    classifier_out_pattern = re.compile(r'classifier (?P<classifier>\S+_INTERNET_\S+) behavior (?P<behavior>\w+)', flags=re.IGNORECASE)
+                    classifier_out_pattern = re.compile(r'classifier (?P<classifier>[\S_]*?INTERNET[_\S]*?) behavior (?P<behavior>\w+)', flags=re.IGNORECASE)
                     classifier_out_find = classifier_out_pattern.search(trafficpolice_out_output)
                     if classifier_out_find:
                         self.classifier_out = classifier_out_find.group("classifier")
@@ -1761,7 +1808,7 @@ def proceso(user_tacacs, pass_tacacs, cid_list, now, commit):
             enterInPolo.get_wan()
             enterInPolo.get_PE()
             
-            enterInPE = AgentPE(server, user_tacacs, pass_tacacs, enterInPolo.pe, action)
+            enterInPE = AgentPE(server, user_tacacs, pass_tacacs, enterInPolo.pe, action, is_wanprivade=enterInPolo.is_wanprivade)
             inPE = enterInPE.enter()
             enterInPE.get_values(wan=enterInPolo.wan)
             enterInPE.analizar(upgrade=newbw)
@@ -1770,6 +1817,7 @@ def proceso(user_tacacs, pass_tacacs, cid_list, now, commit):
             data_PE = {
                 "os": enterInPE.os if hasattr(enterInPE, "os") else None,
                 "ip": enterInPE.ip if hasattr(enterInPE, "ip") else None,
+                "device": enterInPE.device if hasattr(enterInPE, "device") else None,
                 "version": enterInPE.version if hasattr(enterInPE, "version") else None,
                 "hostname": enterInPE.hostname if hasattr(enterInPE, "hostname") else None,
                 "subinterface": enterInPE.subinterface if hasattr(enterInPE, "subinterface") else None,

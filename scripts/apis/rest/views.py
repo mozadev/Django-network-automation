@@ -20,7 +20,6 @@ from rest_framework.renderers import TemplateHTMLRenderer
 from rest_framework.reverse import reverse
 from urllib.parse import urlparse
 import pypff
-from striprtf.striprtf import rtf_to_text
 from datetime import datetime
 
 class UserViewSet(viewsets.ModelViewSet):

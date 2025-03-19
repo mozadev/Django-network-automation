@@ -164,3 +164,19 @@ class GetTimeOfRebootSerializer(serializers.Serializer):
         if value.content_type != 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
             raise serializers.ValidationError("El archivo debe ser de tipo .xlsx")
         return value
+    
+
+class ConfigInDeviceSerializer(serializers.Serializer):
+    user_tacacs = serializers.CharField(required=True, label="Usuario")
+    pass_tacacs = serializers.CharField(required=True, style={'input_type': 'password'}, label="Password")
+    upload_cid = serializers.FileField(allow_empty_file=False, label="UPLOAD LIST OF CID", required=True)
+    commit = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear los cambios en los equipos?")
+    commands = serializers.CharField(required=True, label="Commands", help_text="Ingresar los comandos de configuración", max_length=1000, style={"base_template": "textarea.html", "rows": 3})
+    email = serializers.EmailField(required=False, label="Correo en dónde se enviará la sesión")
+
+    def validate_upload_ip(self, value):
+        if not value.name.endswith('.xlsx'):
+            raise serializers.ValidationError("Solo se permiten archivos con formato .xlsx")
+        if value.content_type != 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+            raise serializers.ValidationError("El archivo debe ser de tipo .xlsx")
+        return value

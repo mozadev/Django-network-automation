@@ -162,7 +162,7 @@ class EnterToDevice(object):
                         )
 
                 if index_ssh == 1:
-                    return self.child
+                    return NotEnterToDevice(f"No se ingresó al equipo {self.loopback}", 500)
             else:
                 run_step(child=self.child, 
                         command=self.username,
@@ -174,7 +174,7 @@ class EnterToDevice(object):
 
             index_os = run_step(child=self.child,                              
                             command=self.password,
-                            expected_output= [PROMP_CISCO_SHOW, PROMP_CISCO, PROMP_HUAWEI],
+                            expected_output= [PROMP_CISCO_SHOW, PROMP_CISCO, PROMP_HUAWEI, r"[Uu]sername:", r"[Pp]assword:"],
                             step_name="CPE - PASSWORD", 
                             timeout=self.timeout,
                             device="CPE"
@@ -200,8 +200,11 @@ class EnterToDevice(object):
                 self.os = "cisco"
             elif index_os == 2:
                 self.os = "huawei"
-            else:
-                pass
+            elif index_os in [3, 4]:
+                self.child.sendcontrol("c")
+                time.sleep(TIME_SLEEP)
+                self.child.expect(PROMP_CRT, timeout=self.timeout)
+                return NotEnterToDevice(f"Credenciales fallidas para el equipo {self.loopback}", 500)
 
         except CustomPexpectError as e:
             return e

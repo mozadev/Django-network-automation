@@ -3,7 +3,7 @@ from rest_framework import permissions, viewsets
 from rest.serializers import GroupSerializer, UserSerializer, ChangeVRFSerializer, ChangeVrfFromExcelSerializer, SuspensionAndReconnectionSerializer
 from rest.serializers import AnexosUploadCsvSerializer, InternetUpgradeSerializer, InterfacesStatusHuaweiSerializer, ReadCorreosPSTSerializer
 from rest.serializers import UpgradeSOHuaweiSwitchSerializer, UploadCorreosTicketsSerializer, UploadSGATicketsSerializer, ReadInDeviceSerializer
-from rest.serializers import GetTimeOfRebootSerializer
+from rest.serializers import GetTimeOfRebootSerializer, ConfigInDeviceSerializer
 from .models import AnexosRegistros, AnexosUpload
 from rest_framework.response import Response
 from rest_framework import status
@@ -16,6 +16,7 @@ import rest.modules.interfaces_status.utils as interfaces_status
 import rest.modules.upgrade_so.utils as upgrade_so
 import rest.modules.read_in_device.utils as read_in_device
 import rest.modules.get_time_of_reboot.utils as get_time_of_reboot
+import rest.modules.config_in_device.utils as config_in_device
 from rest_framework.renderers import TemplateHTMLRenderer
 from rest_framework.reverse import reverse
 from urllib.parse import urlparse
@@ -573,3 +574,44 @@ class GetTimeOfRebootViewSet(viewsets.ViewSet):
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+class ConfigInDeviceViewSet(viewsets.ViewSet):
+    """
+    El excel debe tener una columna con el nombre **cid**
+    """
+    serializer_class = ConfigInDeviceSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def list(self, request):
+        return Response(status=status.HTTP_200_OK)
+    
+    def create(self, request):
+        serializer = ConfigInDeviceSerializer(data=request.data)
+        if serializer.is_valid():
+            try:
+                try:
+                    user_tacacs = serializer.validated_data["user_tacacs"]
+                    pass_tacacs = serializer.validated_data["pass_tacacs"]
+                    upload_cid = serializer.validated_data["upload_cid"]
+                    commit = serializer.validated_data["commit"]
+                    commands = serializer.validated_data["commands"]
+                    email = serializer.validated_data["email"]
+                except KeyError:
+                    email = None
+
+                link = reverse("config-in-device-list", request=request)
+                parsed_url = urlparse(link)
+                base_url = f"{parsed_url.scheme}://{parsed_url.hostname}:{parsed_url.port}"
+                commands = list(commands.split("\r\n"))
+
+                cids = config_in_device.list_of_cid(upload_cid)
+                result = config_in_device.session_in_device(user_tacacs, pass_tacacs, cids, commands, commit, email, base_url)
+            except read_in_device.CustomPexpectError as e:
+                return Response({"detail": f"ERROR:  {e}", "status": e.code}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            except Exception as e:
+                return Response({"detail": f"ERROR:  {e}", "status": 501}, status=status.HTTP_501_NOT_IMPLEMENTED)
+            else:
+                return Response(result, status=status.HTTP_200_OK)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        

@@ -8,6 +8,7 @@ import re
 from django.core.mail import EmailMessage
 import zipfile
 from jinja2 import Environment, FileSystemLoader
+import csv
 
 
 TIME_SLEEP = 0.2
@@ -414,6 +415,16 @@ class CreateHTML(object):
         return self.result
     
 
+def save_in_csv(file, item):
+    existe = os.path.isfile(file)
+    with open(file, "a", newline="", encoding="utf-8") as csvfile:
+        fieldnames = ["code", "detail", "cid", "file"]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames, delimiter=";")
+        if not existe:
+            writer.writeheader()
+        writer.writerow(item)
+
+
 def session_in_device(user_tacacs, pass_tacacs, list_of_cid, commands, commit, email, base_url):
     try:
         result = []
@@ -442,7 +453,9 @@ def session_in_device(user_tacacs, pass_tacacs, list_of_cid, commands, commit, e
                 item["cid"] = device["cid"]
                 item["file"] = base_url + "/" + sessionCRT.ruta + "/" + f'{device["cid"]}.txt'
             finally:
+                save_in_csv(file=sessionCRT.ruta + "/resumen.csv", item=item)
                 result.append(item)
+
         sessionCRT.listar_txt()
         sessionCRT.comprimir_session("session.zip")
         sessionCRT.exit()

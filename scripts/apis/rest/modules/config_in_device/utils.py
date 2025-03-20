@@ -183,7 +183,7 @@ class EnterToDevice(object):
             if index_os == 0:
                 self.os = "cisco"
                 run_step(child=self.child, 
-                        command="ena",
+                        command="enable",
                         expected_output=r"[Pp]assword:", 
                         step_name="CPE - ENA", 
                         timeout=self.timeout,

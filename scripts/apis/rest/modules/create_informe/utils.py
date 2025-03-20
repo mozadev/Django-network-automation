@@ -74,9 +74,8 @@ def validate_required_columns_from_excel(excel_file):
         'it_conclusiones', # RECOMENDACIONES
         'tiempo_interrupcion', #tiempo subsanacion efectivo
         'tipificacion_interrupcion', # tiempo de indisponibilidad,
-        'tipificacion_tipo' # ATRIBUIBLE
-
-        
+        'tipificacion_tipo', # ATRIBUIBLE
+        'fecha_comunicacion_cliente' # Fecha hora solicitud  
     ]
     try:
         df = pd.read_excel(excel_file, dtype=str, engine="openpyxl")
@@ -108,7 +107,6 @@ def create_reportes_by_ticket_by_client(df):
         'Interno': 'Reportado por el usuario'
        })
     
-    df['fecha_hora_solicitud'] = np.where(df['canal_ingreso'] == 'Proactivo', '-', 'Por definir') 
 
     df['fecha_hora_llegada_personal'] = "-"
     df['tiempo_llegada_personal'] = "-"
@@ -118,12 +116,24 @@ def create_reportes_by_ticket_by_client(df):
     df['interrupcion_inicio'] = pd.to_datetime(df['interrupcion_inicio'], errors='coerce')
     df['fecha_generacion'] = pd.to_datetime(df['fecha_generacion'], errors='coerce')
     df['interrupcion_fin'] = pd.to_datetime(df['interrupcion_fin'], errors='coerce')
+    df['fecha_comunicacion_cliente'] = pd.to_datetime(df['fecha_comunicacion_cliente'], errors='coerce')
+
+   
 
     df_sorted = df.sort_values(by='interrupcion_inicio', ascending=True)
 
     df_sorted['interrupcion_inicio'] = df_sorted['interrupcion_inicio'].dt.strftime('%d/%m/%Y %H:%M')
     df_sorted['fecha_generacion'] = df_sorted['fecha_generacion'].dt.strftime('%d/%m/%Y %H:%M')
     df_sorted['interrupcion_fin'] = df_sorted['interrupcion_fin'].dt.strftime('%d/%m/%Y %H:%M')
+
+    df_sorted['fecha_comunicacion_cliente'] = df_sorted['fecha_comunicacion_cliente'].dt.strftime('%d/%m/%Y %H:%M')
+
+    df_sorted['fecha_comunicacion_cliente'] = np.where(
+        df_sorted['canal_ingreso'] == 'Proactivo',
+        '-',
+        df_sorted['fecha_comunicacion_cliente']
+        ) 
+
 
     df_sorted['tipificacion_problema'] = df_sorted['tipificacion_problema'].str.split('-').str[0].str.strip()
     
@@ -150,6 +160,38 @@ def create_reportes_by_ticket_by_client(df):
     
     df_sorted = df_sorted.merge(df_sedes_by_cid, on="cid", how="left")
 
+    df_sorted = fill_column_mejoras_and_recomendaciones(df_sorted)
+
     return df_sorted.to_dict(orient="records")
 
+
+def fill_column_mejoras_and_recomendaciones(df):
+    """
+    Split 'it_conclusiones' into 'mejoras' and 'recomendaciones'.
+    - 'recomendaciones' will contain the text starting from the line that contains 'recomienda'.
+    - 'mejoras' will contain the text above that line.
+    """
+    if 'mejoras' not in df.columns:
+        df['mejoras'] = ''
+    if 'recomendaciones' not in df.columns:
+        df['recomendaciones'] = ''
+    
+    def process_text(text):
+        lines = text.split('\n')
+        split_index = None
+
+        for i, line in enumerate(lines):
+            if 'recomienda' in line.lower():
+                split_index = i
+                break
+        
+        if split_index is not None:
+            return '\n'.join(lines[:split_index]), '\n'.join(lines[split_index:])
+        return text, '' 
+    
+    df[['mejoras', 'recomendaciones']] = df['it_conclusiones'].apply(
+        lambda text: pd.Series(process_text(text))
+    )
+    
+    return df
 

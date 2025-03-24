@@ -16,6 +16,7 @@ import rest.modules.internet_upgrade.claro as internet_upgrade_v2
 import rest.modules.interfaces_status.utils as interfaces_status
 import rest.modules.upgrade_so.utils as upgrade_so
 import rest.modules.read_in_device.utils as read_in_device
+import rest.modules.create_informe.utils as create_informe
 import rest.modules.get_time_of_reboot.utils as get_time_of_reboot
 import rest.modules.config_in_device.utils as config_in_device
 from rest_framework.renderers import TemplateHTMLRenderer

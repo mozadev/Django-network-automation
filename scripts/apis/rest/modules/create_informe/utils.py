@@ -48,7 +48,8 @@ class CreateInforme:
             lines.pop()
 
         return "\n".join(lines)
-    
+
+
 def validate_required_columns_from_excel(excel_file):
     required_columns = [
         'nro_incidencia',  # ticket
@@ -88,6 +89,7 @@ def validate_required_columns_from_excel(excel_file):
     ).fillna("-")
 
     return df_clean
+
 
 def create_reportes_by_ticket_by_client(df):
 
@@ -153,6 +155,37 @@ def create_reportes_by_ticket_by_client(df):
     df_sorted = fill_column_mejoras_and_recomendaciones(df_sorted)
 
     return df_sorted.to_dict(orient="records")
+
+
+def fill_column_mejoras_and_recomendaciones(df):
+    """
+    Split 'it_conclusiones' into 'mejoras' and 'recomendaciones'.
+    - 'recomendaciones' will contain the text starting from the line that contains 'recomienda'.
+    - 'mejoras' will contain the text above that line.
+    """
+    if 'mejoras' not in df.columns:
+        df['mejoras'] = ''
+    if 'recomendaciones' not in df.columns:
+        df['recomendaciones'] = ''
+    
+    def process_text(text):
+        lines = text.split('\n')
+        split_index = None
+
+        for i, line in enumerate(lines):
+            if 'recomienda' in line.lower():
+                split_index = i
+                break
+        
+        if split_index is not None:
+            return '\n'.join(lines[:split_index]), '\n'.join(lines[split_index:])
+        return text, '' 
+    
+    df[['mejoras', 'recomendaciones']] = df['it_conclusiones'].apply(
+        lambda text: pd.Series(process_text(text))
+    )
+    
+    return df
 
 
 

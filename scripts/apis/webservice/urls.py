@@ -47,6 +47,7 @@ router.register(r'upload-sga-tickets', views.UploadSGATicketsViewSet, basename='
 router.register(r'read-in-device', views.ReadInDeviceViewSet, basename='read-in-device')
 router.register(r'get-time-of-reboot', views.GetTimeOfRebootViewSet, basename='get-time-of-reboot')
 router.register(r'config-in-device', views.ConfigInDeviceViewSet, basename='config-in-device')
+router.register(r'create-informe', views.CreateInformeViewSet, basename='create-informe')
 
 # Wire up our API using automatic URL routing.
 # Additionally, we include login URLs for the browsable API.

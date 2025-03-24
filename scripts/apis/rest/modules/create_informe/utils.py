@@ -1,4 +1,6 @@
 from docxtpl import DocxTemplate
+from pathlib import Path
+import numpy as np
 import re
 import pandas as pd
 
@@ -86,6 +88,72 @@ def validate_required_columns_from_excel(excel_file):
     ).fillna("-")
 
     return df_clean
+
+def create_reportes_by_ticket_by_client(df):
+
+    df['canal_ingreso'] = df['canal_ingreso'].replace({
+        'e-mail': 'Reportado por el usuario',
+        'Telefono': 'Reportado por el usuario',
+        'Interno': 'Reportado por el usuario'
+       })
+    
+
+    df['fecha_hora_llegada_personal'] = "-"
+    df['tiempo_llegada_personal'] = "-"
+    df['horas_excedidas_plazo_reparacion_bases'] = 0
+    df['descripcion_problema'] = 'Se detectó la pérdida de gestión del servicio en los Sistemas de Monitoreo de Claro.'
+    
+    df['interrupcion_inicio'] = pd.to_datetime(df['interrupcion_inicio'], errors='coerce')
+    df['fecha_generacion'] = pd.to_datetime(df['fecha_generacion'], errors='coerce')
+    df['interrupcion_fin'] = pd.to_datetime(df['interrupcion_fin'], errors='coerce')
+    df['fecha_comunicacion_cliente'] = pd.to_datetime(df['fecha_comunicacion_cliente'], errors='coerce')
+
+   
+
+    df_sorted = df.sort_values(by='interrupcion_inicio', ascending=True)
+
+    df_sorted['interrupcion_inicio'] = df_sorted['interrupcion_inicio'].dt.strftime('%d/%m/%Y %H:%M')
+    df_sorted['fecha_generacion'] = df_sorted['fecha_generacion'].dt.strftime('%d/%m/%Y %H:%M')
+    df_sorted['interrupcion_fin'] = df_sorted['interrupcion_fin'].dt.strftime('%d/%m/%Y %H:%M')
+
+    df_sorted['fecha_comunicacion_cliente'] = df_sorted['fecha_comunicacion_cliente'].dt.strftime('%d/%m/%Y %H:%M')
+
+    df_sorted['fecha_comunicacion_cliente'] = np.where(
+        df_sorted['canal_ingreso'] == 'Proactivo',
+        '-',
+        df_sorted['fecha_comunicacion_cliente']
+        ) 
+
+
+    df_sorted['tipificacion_problema'] = df_sorted['tipificacion_problema'].str.split('-').str[0].str.strip()
+    
+    df_sorted["tipificacion_problema"] = df_sorted["tipificacion_problema"].apply(
+    lambda x: "PROBLEMA DE ENERGIA COMERCIAL EN SITE/POP" if "PROBLEMA DE ENERGIA COMERCIAL EN SITE/POP" in x else x
+)   
+    
+    df_sorted['tipificacion_tipo'] = df_sorted['tipificacion_tipo'].replace({
+        'CLARO - DEGRADACION': 'CLARO', 
+        'TERCEROS - CORTE' : 'TERCEROS'
+       })
+   
+    
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+    file_path_sedes = BASE_DIR / "media" / "pronatel" / "sedes" / "RELACIÓN DE CADs CON CID.xlsx"
+
+    if not  file_path_sedes.exists():
+            raise FileNotFoundError(f" File not found {file_path_sedes}")
+    
+    df_sedes_by_cid = pd.read_excel(file_path_sedes)
+
+    df_sorted["cid"] = df_sorted["cid"].astype(str)  
+    df_sedes_by_cid["cid"] = df_sedes_by_cid["cid"].astype(str)
+    
+    df_sorted = df_sorted.merge(df_sedes_by_cid, on="cid", how="left")
+
+    df_sorted = fill_column_mejoras_and_recomendaciones(df_sorted)
+
+    return df_sorted.to_dict(orient="records")
+
 
 
 

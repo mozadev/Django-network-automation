@@ -1,4 +1,5 @@
 from docxtpl import DocxTemplate
+import re
 
 class CreateInforme:
     def __init__(self, template, data, now):
@@ -33,5 +34,17 @@ class CreateInforme:
                 else reporte
                 for reporte in reportes
             ]
+    
+    def remove_last_lines(self, text):
+        DATE_PATTERN = re.compile(
+            r"(?i)^\s*fecha\s*y\s*hora\s*(de\s*)?(inicio|fin)?:?\s*\d{1,2}/\d{1,2}/\d{4}\s*\d{1,2}:\d{2}\s*$"
+        )
+        lines = text.split("\n")
+
+        while lines and DATE_PATTERN.search(lines[-1].strip()):
+            lines.pop()
+
+        return "\n".join(lines)
+
 
 

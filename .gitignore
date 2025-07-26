@@ -4,5 +4,5 @@ media
 backups*
 __pycache__
 db.sqlite3
-migrations
 nohup.out
+logs

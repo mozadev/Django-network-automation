@@ -1499,3 +1499,595 @@ def analyze_optimization_potential(topology_info):
     logger.info(f"   - Tiempo estimado: {analysis['estimated_time']}")
     
     return analysis 
+
+@shared_task(bind=True, time_limit=7200, soft_time_limit=6000)
+def upgrade_hierarchical_task(self, switches_data):
+    """
+    Upgrade jerárquico: Un switch principal actúa como servidor FTP local
+    para los demás switches de la sede.
+    
+    Args:
+        switches_data: Lista de diccionarios con datos de switches
+    """
+    logger.info(f"🏗️ Iniciando upgrade jerárquico para {len(switches_data)} switches")
+    
+    try:
+        # Extraer datos comunes
+        user_tacacs = switches_data[0]['user_tacacs']
+        pass_tacacs = switches_data[0]['pass_tacacs']
+        ip_ftp = switches_data[0]['ip_ftp']
+        pass_ftp = switches_data[0]['pass_ftp']
+        so_upgrade = switches_data[0]['so_upgrade']
+        parche_upgrade = switches_data[0]['parche_upgrade']
+        download = switches_data[0]['download']
+        
+        # Lista de IPs
+        ip_list = [switch['ip'] for switch in switches_data]
+        
+        # 1. SELECCIONAR SWITCH PRINCIPAL (IP1)
+        primary_switch = select_primary_switch(ip_list, user_tacacs, pass_tacacs)
+        if not primary_switch:
+            return {"error": "No se pudo seleccionar un switch principal"}
+        
+        primary_ip = primary_switch['ip']
+        logger.info(f"🎯 Switch principal seleccionado: {primary_ip}")
+        
+        # 2. VERIFICAR RECURSOS DEL SWITCH PRINCIPAL
+        resource_check = verify_switch_resources(primary_ip, user_tacacs, pass_tacacs, so_upgrade, parche_upgrade)
+        if not resource_check['success']:
+            return {"error": f"Recursos insuficientes en {primary_ip}: {resource_check['message']}"}
+        
+        logger.info(f"✅ Recursos verificados en {primary_ip}: {resource_check['message']}")
+        
+        # 3. DESCARGAR FIRMWARE EN EL SWITCH PRINCIPAL
+        logger.info(f"📥 Descargando firmware en switch principal {primary_ip}")
+        primary_result = download_firmware_to_primary(primary_ip, user_tacacs, pass_tacacs, so_upgrade, parche_upgrade, ip_ftp, pass_ftp)
+        
+        if "error" in primary_result:
+            return {"error": f"Error descargando firmware en {primary_ip}: {primary_result['error']}"}
+        
+        logger.info(f"✅ Firmware descargado en {primary_ip}")
+        
+        # 4. DISTRIBUIR A LOS DEMÁS SWITCHES
+        client_ips = [ip for ip in ip_list if ip != primary_ip]
+        client_results = []
+        
+        for client_ip in client_ips:
+            logger.info(f"🔄 Distribuyendo firmware de {primary_ip} a {client_ip}")
+            client_result = distribute_to_client(primary_ip, client_ip, user_tacacs, pass_tacacs, so_upgrade, parche_upgrade)
+            client_results.append(client_result)
+            
+            # Actualizar progreso
+            self.update_state(
+                state='PROGRESS',
+                meta={
+                    'current': len(client_results),
+                    'total': len(client_ips),
+                    'status': f'Distribuyendo a {client_ip}'
+                }
+            )
+        
+        # 5. RESULTADO FINAL
+        result = {
+            "primary_switch": primary_ip,
+            "client_switches": client_ips,
+            "primary_result": primary_result,
+            "client_results": client_results,
+            "total_switches": len(switches_data),
+            "status": "completed",
+            "message": f"Upgrade jerárquico completado: 1 principal + {len(client_ips)} clientes",
+            "resource_check": resource_check
+        }
+        
+        logger.info(f"✅ Upgrade jerárquico completado exitosamente")
+        return result
+        
+    except Exception as e:
+        logger.error(f"❌ Error en upgrade jerárquico: {str(e)}")
+        return {"error": str(e)}
+
+
+def select_primary_switch(ip_list, user_tacacs, pass_tacacs):
+    """
+    Selecciona el switch principal basado en criterios:
+    1. Mejor conectividad de red
+    2. Más espacio disponible
+    3. Mejor estado de salud
+    """
+    switch_scores = []
+    
+    for ip in ip_list:
+        try:
+            score = 0
+            switch_info = {}
+            
+            # Conectar al switch
+            child = pexpect.spawn(f"telnet {ip}", timeout=30)
+            child.expect([r"[Uu]sername:", r"\]\$"])
+            
+            if child.after.decode().strip() == r"\]\$":
+                continue
+                
+            # Autenticación
+            child.send(user_tacacs)
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
+            child.expect("[Pp]assword:")
+            child.send(pass_tacacs)
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
+            child.expect(r"\s<[\w\-.]+>")
+            
+            # 1. Verificar conectividad (interfaces UP)
+            child.send("display interface brief")
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
+            child.expect(r"\s<[\w\-.]+>")
+            output_interfaces = child.before.decode("utf-8")
+            
+            up_interfaces = len(re.findall(r'UP', output_interfaces))
+            score += up_interfaces * 10  # +10 puntos por interfaz UP
+            switch_info['up_interfaces'] = up_interfaces
+            
+            # 2. Verificar espacio disponible
+            child.send("display device")
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
+            child.expect(r"\s<[\w\-.]+>")
+            output_device = child.before.decode("utf-8")
+            
+            # Buscar espacio libre en flash
+            flash_pattern = re.search(r'flash:\s+(\d+)\s+(\d+)\s+(\d+)', output_device)
+            if flash_pattern:
+                total = int(flash_pattern.group(1))
+                used = int(flash_pattern.group(2))
+                free = int(flash_pattern.group(3))
+                free_mb = free / 1024  # Convertir a MB
+                
+                if free_mb >= 200:  # Mínimo 200MB libres
+                    score += 50
+                elif free_mb >= 100:
+                    score += 25
+                    
+                switch_info['free_space_mb'] = free_mb
+            else:
+                switch_info['free_space_mb'] = 0
+            
+            # 3. Verificar memoria RAM
+            child.send("display memory-usage")
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
+            child.expect(r"\s<[\w\-.]+>")
+            output_memory = child.before.decode("utf-8")
+            
+            memory_pattern = re.search(r'Memory utilization: (\d+)%', output_memory)
+            if memory_pattern:
+                memory_usage = int(memory_pattern.group(1))
+                if memory_usage < 70:  # Menos del 70% de uso
+                    score += 30
+                elif memory_usage < 85:
+                    score += 15
+                    
+                switch_info['memory_usage'] = memory_usage
+            else:
+                switch_info['memory_usage'] = 100
+            
+            # 4. Verificar CPU
+            child.send("display cpu-usage")
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
+            child.expect(r"\s<[\w\-.]+>")
+            output_cpu = child.before.decode("utf-8")
+            
+            cpu_pattern = re.search(r'CPU utilization: (\d+)%', output_cpu)
+            if cpu_pattern:
+                cpu_usage = int(cpu_pattern.group(1))
+                if cpu_usage < 50:  # Menos del 50% de uso
+                    score += 20
+                elif cpu_usage < 80:
+                    score += 10
+                    
+                switch_info['cpu_usage'] = cpu_usage
+            else:
+                switch_info['cpu_usage'] = 100
+            
+            child.send("quit")
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
+            child.close()
+            
+            switch_info['ip'] = ip
+            switch_info['score'] = score
+            switch_scores.append(switch_info)
+            
+            logger.info(f"📊 Switch {ip}: Score={score}, Interfaces={up_interfaces}, RAM={switch_info.get('memory_usage', 100)}%, CPU={switch_info.get('cpu_usage', 100)}%, Flash={switch_info.get('free_space_mb', 0)}MB")
+            
+        except Exception as e:
+            logger.error(f"❌ Error evaluando switch {ip}: {str(e)}")
+            continue
+    
+    if not switch_scores:
+        return None
+    
+    # Seleccionar el switch con mejor score
+    best_switch = max(switch_scores, key=lambda x: x['score'])
+    logger.info(f"🏆 Mejor switch seleccionado: {best_switch['ip']} (Score: {best_switch['score']})")
+    
+    return best_switch
+
+
+def verify_switch_resources(switch_ip, user_tacacs, pass_tacacs, so_upgrade, parche_upgrade):
+    """
+    Verifica que el switch tenga recursos suficientes para el upgrade
+    """
+    try:
+        # Conectar al switch
+        child = pexpect.spawn(f"telnet {switch_ip}", timeout=30)
+        child.expect([r"[Uu]sername:", r"\]\$"])
+        
+        if child.after.decode().strip() == r"\]\$":
+            return {"success": False, "message": "Switch sin gestión"}
+            
+        # Autenticación
+        child.send(user_tacacs)
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect("[Pp]assword:")
+        child.send(pass_tacacs)
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\s<[\w\-.]+>")
+        
+        # Verificar espacio en flash
+        child.send("display device")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\s<[\w\-.]+>")
+        output_device = child.before.decode("utf-8")
+        
+        flash_pattern = re.search(r'flash:\s+(\d+)\s+(\d+)\s+(\d+)', output_device)
+        if not flash_pattern:
+            return {"success": False, "message": "No se pudo obtener información de flash"}
+        
+        total = int(flash_pattern.group(1))
+        used = int(flash_pattern.group(2))
+        free = int(flash_pattern.group(3))
+        free_mb = free / 1024
+        
+        # Verificar memoria RAM
+        child.send("display memory-usage")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\s<[\w\-.]+>")
+        output_memory = child.before.decode("utf-8")
+        
+        memory_pattern = re.search(r'Memory utilization: (\d+)%', output_memory)
+        memory_usage = int(memory_pattern.group(1)) if memory_pattern else 100
+        
+        child.send("quit")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.close()
+        
+        # Criterios de verificación
+        required_space = 200  # 200MB mínimo para SO + parche
+        max_memory_usage = 85  # Máximo 85% de uso de RAM
+        
+        if free_mb < required_space:
+            return {
+                "success": False, 
+                "message": f"Espacio insuficiente: {free_mb:.1f}MB libres, se requieren {required_space}MB"
+            }
+        
+        if memory_usage > max_memory_usage:
+            return {
+                "success": False, 
+                "message": f"Memoria saturada: {memory_usage}% de uso, máximo {max_memory_usage}%"
+            }
+        
+        return {
+            "success": True,
+            "message": f"Recursos OK: {free_mb:.1f}MB libres, {memory_usage}% RAM",
+            "free_space_mb": free_mb,
+            "memory_usage": memory_usage
+        }
+        
+    except Exception as e:
+        return {"success": False, "message": f"Error verificando recursos: {str(e)}"}
+
+
+def download_firmware_to_primary(primary_ip, user_tacacs, pass_tacacs, so_upgrade, parche_upgrade, ip_ftp, pass_ftp):
+    """
+    Descarga el firmware en el switch principal desde el servidor FTP externo
+    Usa el comando 'copy' que es más rápido y confiable que 'get'
+    """
+    try:
+        # Conectar al switch principal
+        child = pexpect.spawn(f"telnet {primary_ip}", timeout=60)
+        child.expect([r"[Uu]sername:", r"\]\$"])
+        
+        if child.after.decode().strip() == r"\]\$":
+            return {"error": f"Switch {primary_ip} sin gestión"}
+        
+        # Autenticación
+        child.send(user_tacacs)
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect("[Pp]assword:")
+        child.send(pass_tacacs)
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\s<[\w\-.]+>")
+        
+        # Configuración inicial
+        child.send("screen-length 0 temporary")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\s<[\w\-.]+>")
+        
+        result = {"so_downloaded": False, "parche_downloaded": False}
+        
+        # Descargar SO si se especifica (usando COPY - más rápido que GET)
+        if so_upgrade:
+            logger.info(f"📥 Descargando SO {so_upgrade} en {primary_ip} (método: copy)")
+            child.send(f"copy {so_upgrade} {ip_ftp}#flash:")
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
+            child.expect(r"\[Y\/N\]:")
+            child.send("Y")
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
+            child.expect(r"\s<[\w\-.]+>")
+            result["so_downloaded"] = True
+            logger.info(f"✅ SO descargado en {primary_ip} (copy exitoso)")
+        
+        # Descargar parche si se especifica (usando COPY - más rápido que GET)
+        if parche_upgrade:
+            logger.info(f"📥 Descargando parche {parche_upgrade} en {primary_ip} (método: copy)")
+            child.send(f"copy {parche_upgrade} {ip_ftp}#flash:")
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
+            child.expect(r"\[Y\/N\]:")
+            child.send("Y")
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
+            child.expect(r"\s<[\w\-.]+>")
+            result["parche_downloaded"] = True
+            logger.info(f"✅ Parche descargado en {primary_ip} (copy exitoso)")
+        
+        child.send("quit")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.close()
+        
+        return result
+        
+    except Exception as e:
+        return {"error": f"Error descargando firmware en {primary_ip}: {str(e)}"}
+
+
+def distribute_to_client(primary_ip, client_ip, user_tacacs, pass_tacacs, so_upgrade, parche_upgrade):
+    """
+    Distribuye firmware del switch principal al cliente
+    """
+    try:
+        # Conectar al cliente
+        child = pexpect.spawn(f"telnet {client_ip}", timeout=60)
+        child.expect([r"[Uu]sername:", r"\]\$"])
+        
+        if child.after.decode().strip() == r"\]\$":
+            return {"error": f"Switch {client_ip} sin gestión"}
+        
+        # Autenticación
+        child.send(user_tacacs)
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect("[Pp]assword:")
+        child.send(pass_tacacs)
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\s<[\w\-.]+>")
+        
+        # Configuración inicial
+        child.send("screen-length 0 temporary")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\s<[\w\-.]+>")
+        
+        result = {"so_copied": False, "parche_copied": False}
+        
+        # Copiar SO del principal
+        if so_upgrade:
+            logger.info(f"📋 Copiando SO de {primary_ip} a {client_ip}")
+            child.send(f"copy {so_upgrade} {primary_ip}#flash:")
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
+            child.expect(r"\[Y\/N\]:")
+            child.send("Y")
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
+            child.expect(r"\s<[\w\-.]+>")
+            result["so_copied"] = True
+            logger.info(f"✅ SO copiado de {primary_ip} a {client_ip}")
+            
+            # Delay para no saturar la red
+            time.sleep(3)
+        
+        # Copiar parche del principal
+        if parche_upgrade:
+            logger.info(f"📋 Copiando parche de {primary_ip} a {client_ip}")
+            child.send(f"copy {parche_upgrade} {primary_ip}#flash:")
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
+            child.expect(r"\[Y\/N\]:")
+            child.send("Y")
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
+            child.expect(r"\s<[\w\-.]+>")
+            result["parche_copied"] = True
+            logger.info(f"✅ Parche copiado de {primary_ip} a {client_ip}")
+            
+            # Delay para no saturar la red
+            time.sleep(3)
+        
+        child.send("quit")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.close()
+        
+        return {
+            "client_ip": client_ip,
+            "primary_ip": primary_ip,
+            "status": "completed",
+            "result": result,
+            "message": f"Firmware distribuido desde {primary_ip}"
+        }
+        
+    except Exception as e:
+        return {
+            "client_ip": client_ip,
+            "primary_ip": primary_ip,
+            "status": "error",
+            "error": str(e),
+            "message": f"Error distribuyendo a {client_ip}"
+        } 
+
+def download_firmware_to_primary_ftp(primary_ip, user_tacacs, pass_tacacs, so_upgrade, parche_upgrade, ip_ftp, pass_ftp):
+    """
+    Descarga el firmware usando método FTP con 'get' (método alternativo)
+    Este método es más lento pero puede ser más compatible en algunos casos
+    """
+    try:
+        # Conectar al switch principal
+        child = pexpect.spawn(f"telnet {primary_ip}", timeout=60)
+        child.expect([r"[Uu]sername:", r"\]\$"])
+        
+        if child.after.decode().strip() == r"\]\$":
+            return {"error": f"Switch {primary_ip} sin gestión"}
+        
+        # Autenticación
+        child.send(user_tacacs)
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect("[Pp]assword:")
+        child.send(pass_tacacs)
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\s<[\w\-.]+>")
+        
+        # Configuración inicial
+        child.send("screen-length 0 temporary")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\s<[\w\-.]+>")
+        
+        result = {"so_downloaded": False, "parche_downloaded": False}
+        
+        # Iniciar sesión FTP
+        logger.info(f"📡 Iniciando sesión FTP en {primary_ip}")
+        child.send(f"ftp {ip_ftp}")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\)\):")
+        child.send(user_tacacs)
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"[Pp]assword:")
+        child.send(pass_tacacs)
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\n\[ftp\]")
+        
+        # Descargar SO usando GET
+        if so_upgrade:
+            logger.info(f"📥 Descargando SO {so_upgrade} en {primary_ip} (método: get)")
+            child.send(f"get {so_upgrade}")
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
+            child.expect(r"\n\[ftp\]")
+            result["so_downloaded"] = True
+            logger.info(f"✅ SO descargado en {primary_ip} (get exitoso)")
+        
+        # Descargar parche usando GET
+        if parche_upgrade:
+            logger.info(f"📥 Descargando parche {parche_upgrade} en {primary_ip} (método: get)")
+            child.send(f"get {parche_upgrade}")
+            time.sleep(TIME_SLEEP)
+            child.sendline("")
+            child.expect(r"\n\[ftp\]")
+            result["parche_downloaded"] = True
+            logger.info(f"✅ Parche descargado en {primary_ip} (get exitoso)")
+        
+        # Salir de FTP
+        child.send("quit")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.expect(r"\s<[\w\-.]+>")
+        
+        child.send("quit")
+        time.sleep(TIME_SLEEP)
+        child.sendline("")
+        child.close()
+        
+        return result
+        
+    except Exception as e:
+        return {"error": f"Error descargando firmware en {primary_ip}: {str(e)}"}
+
+
+def compare_download_methods(primary_ip, user_tacacs, pass_tacacs, so_upgrade, parche_upgrade, ip_ftp, pass_ftp):
+    """
+    Compara los métodos COPY vs GET para descarga de firmware
+    Retorna métricas de rendimiento de ambos métodos
+    """
+    import time
+    
+    comparison = {
+        "copy_method": {},
+        "get_method": {},
+        "recommendation": ""
+    }
+    
+    # Probar método COPY
+    logger.info("🧪 Probando método COPY...")
+    start_time = time.time()
+    copy_result = download_firmware_to_primary(primary_ip, user_tacacs, pass_tacacs, so_upgrade, parche_upgrade, ip_ftp, pass_ftp)
+    copy_time = time.time() - start_time
+    
+    comparison["copy_method"] = {
+        "success": "error" not in copy_result,
+        "time_seconds": round(copy_time, 2),
+        "result": copy_result
+    }
+    
+    # Probar método GET
+    logger.info("🧪 Probando método GET...")
+    start_time = time.time()
+    get_result = download_firmware_to_primary_ftp(primary_ip, user_tacacs, pass_tacacs, so_upgrade, parche_upgrade, ip_ftp, pass_ftp)
+    get_time = time.time() - start_time
+    
+    comparison["get_method"] = {
+        "success": "error" not in get_result,
+        "time_seconds": round(get_time, 2),
+        "result": get_result
+    }
+    
+    # Determinar recomendación
+    if comparison["copy_method"]["success"] and comparison["get_method"]["success"]:
+        if copy_time < get_time:
+            comparison["recommendation"] = f"COPY es {round(get_time/copy_time, 1)}x más rápido"
+        else:
+            comparison["recommendation"] = f"GET es {round(copy_time/get_time, 1)}x más rápido"
+    elif comparison["copy_method"]["success"]:
+        comparison["recommendation"] = "Solo COPY funciona"
+    elif comparison["get_method"]["success"]:
+        comparison["recommendation"] = "Solo GET funciona"
+    else:
+        comparison["recommendation"] = "Ningún método funciona"
+    
+    logger.info(f"📊 Comparación de métodos:")
+    logger.info(f"   COPY: {comparison['copy_method']['time_seconds']}s, Éxito: {comparison['copy_method']['success']}")
+    logger.info(f"   GET:  {comparison['get_method']['time_seconds']}s, Éxito: {comparison['get_method']['success']}")
+    logger.info(f"   Recomendación: {comparison['recommendation']}")
+    
+    return comparison

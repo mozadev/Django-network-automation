@@ -3,14 +3,16 @@ from rest_framework import permissions, viewsets
 from rest.serializers import GroupSerializer, UserSerializer, ChangeVRFSerializer, ChangeVrfFromExcelSerializer, SuspensionAndReconnectionSerializer
 from rest.serializers import AnexosUploadCsvSerializer, InternetUpgradeSerializer, InterfacesStatusHuaweiSerializer, ReadCorreosPSTSerializer
 from rest.serializers import UpgradeSOHuaweiSwitchSerializer, UploadCorreosTicketsSerializer, UploadSGATicketsSerializer, ReadInDeviceSerializer
-from rest.serializers import GetTimeOfRebootSerializer, ConfigInDeviceSerializer
 from rest.serializers import CreateInformeSerializer
 from .models import AnexosRegistros, AnexosUpload
+from rest.serializers import GetTimeOfRebootSerializer, ConfigInDeviceSerializer, AnexoDocumentoSerializer, AnexoAnexoSerializer, AnexoRegistroSerializer
+from rest.models import AnexoDocumento, AnexoAnexo, AnexoRegistro
+from rest.filters import AnexoDocumentoFilters, AnexoAnexoFilters, AnexoRegistroFilters
+from rest.paginations import AnexoRegistroPagination, AnexoAnexoPagination
 from rest_framework.response import Response
 from rest_framework import status
 import rest.modules.update_vrf.utils as update_vrf
 import rest.modules.suspension.utils as suspension_reconnection
-import rest.modules.upload_anexos.utils as upload_anexos
 import rest.modules.internet_upgrade.utils as internet_upgrade
 import rest.modules.internet_upgrade.claro as internet_upgrade_v2
 import rest.modules.interfaces_status.utils as interfaces_status
@@ -24,6 +26,20 @@ from rest_framework.reverse import reverse
 from urllib.parse import urlparse
 import pypff
 from datetime import datetime
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import viewsets, status, permissions
+from rest_framework.response import Response
+from rest_framework.decorators import action
+from .serializers import UpgradeSOHuaweiSwitchSerializer
+from .modules.upgrade_so import utils
+from .modules.upgrade_so.tasks import upgrade_multiple_switches_task, upgrade_multiple_switches_parallel_task, upgrade_multiple_switches_chord_task, upgrade_with_rollback_task
+from celery.result import AsyncResult
+from urllib.parse import urlparse
+from django.urls import reverse
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class UserViewSet(viewsets.ModelViewSet):
     """
@@ -197,122 +213,6 @@ class SuspensionAndReconnectionView(viewsets.ViewSet):
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        
-class AnexosUploadCsvViewSet(viewsets.ViewSet):
-    """
-    DOCSTRING
-    """
-    serializer_class = AnexosUploadCsvSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def retrieve(self, request, pk=None):
-        result = {}
-        queryset = AnexosRegistros.objects.filter(key__key=pk).order_by("-registro").values()
-        if queryset:
-            n = len(queryset)
-            fecha_final = queryset[0]["registro"]
-            fecha_inicial = queryset[n - 1]["registro"]
-            for i in queryset:
-                if i["status"] == True:
-                    fecha_inicial = i["registro"]
-                    break
-            duration = (fecha_final - fecha_inicial).total_seconds() / 3600
-            result["duration_hrs"] = "%.2f" % duration
-            result["data"] = queryset
-        return Response(result, status=status.HTTP_200_OK)
-
-    def list(self, request):
-        dashboard = reverse("anexos-upload-dashboard-list", request=request)
-        return Response({"ver-dashboard": dashboard}, status=status.HTTP_200_OK)
-    
-    def create(self, request):
-        serializer = AnexosUploadCsvSerializer(data=request.data)
-        if serializer.is_valid():
-            upload_excel = serializer.validated_data["upload_excel"]
-            upload_fecha = serializer.validated_data["upload_fecha"]
-            
-            data, status_upload =  upload_anexos.clean_data(upload_excel, upload_fecha)
-            if status_upload == 200:
-                new_register = []
-                anexos_registros = AnexosRegistros.objects.filter(last=True)
-                if anexos_registros.count() > 0:
-                    first = False
-                else:
-                    first = True
-                anexos_registros.update(last=False)
-
-                for item in data:
-                    i = {}
-                    anexo, creado = AnexosUpload.objects.get_or_create(
-                        key=item["key"],
-                        anexo=item["anexo"],
-                    )
-                    if creado:
-                        i["key"] = item["key"]
-                        i["anexo"] = item["anexo"]
-                        new_register.append(i)
-
-                    AnexosRegistros.objects.create(key=anexo, status=item["status"], registro=item["registro"], last=True, first=first)
-
-                    dashboard = reverse("anexos-upload-dashboard-list", request=request)
-                return Response({"msg": "DATOS SUBIDOS EXITOSAMENTE", "ver-dashboard": dashboard, "nuevos": new_register}, status=status.HTTP_200_OK)
-            else:
-                return Response({"msg": "ERROR"}, status=status.HTTP_400_BAD_REQUEST)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-
-class AnexosUploadDashboard(viewsets.ViewSet):
-    """
-    DOCSTRING
-    """
-    permission_classes = [permissions.IsAuthenticated]
-    #renderer_classes = [TemplateHTMLRenderer]
-    #template_name="anexos_dashboard.html"
-    
-
-    def list(self, request):
-        result={}
-        queryset_first_up = AnexosRegistros.objects.filter(first=True, status=True)
-        list_first_up = []
-        for i in queryset_first_up:
-            list_first_up.append(i.key.key)
-        queryset = AnexosRegistros.objects.filter(last=True, status=False, key__key__in=list_first_up)
-        
-        result["count"] = queryset_first_up.count()
-        result["down"]  = queryset.count()
-        result["down_rate"] = "%.2f" % ((result["down"] / result["count"])  * 100) 
-        result["up"]  = result["count"] - result["down"]
-        result["up_rate"] = "%.2f" % (100 - float(result["down_rate"]))
-
-        queryset_values = queryset.values("key__key", "key__anexo", "registro", "status", "last")
-        for item in queryset_values:
-            item_queryset = AnexosRegistros.objects.filter(key__key=item["key__key"]).order_by("-registro").values()
-            if item_queryset:
-                n = len(item_queryset)
-                fecha_final = item_queryset[0]["registro"]
-                fecha_inicial = item_queryset[n - 1]["registro"]
-                for i in item_queryset:
-                    if i["status"] == True:
-                        fecha_inicial = i["registro"]
-                        break
-                duration = (fecha_final - fecha_inicial).total_seconds() / 3600
-
-            item["duration_hrs"] = "%.2f" % duration
-        
-        result["data"] = queryset_values
-        return Response({"data": result})
-    
-
-class AnexosUploadDashboard2(viewsets.ViewSet):
-    """
-    DOCSTRING
-    """
-    permission_classes = [permissions.IsAuthenticated]
-    renderer_classes = [TemplateHTMLRenderer]
-    template_name="anexos_dashboard2.html"
-    def list(self, request):
-        return Response(status=status.HTTP_200_OK)
     
 
 class InternetUpgrade(viewsets.ViewSet):
@@ -434,6 +334,7 @@ class UpgradeSOHuaweiSwitchViewSets(viewsets.ViewSet):
     """
     serializer_class = UpgradeSOHuaweiSwitchSerializer
     permission_classes = [permissions.IsAuthenticated]
+    
     def list(self, request):
         return Response(status=status.HTTP_200_OK)
     
@@ -454,11 +355,250 @@ class UpgradeSOHuaweiSwitchViewSets(viewsets.ViewSet):
             base_url = f"{parsed_url.scheme}://{parsed_url.hostname}:{parsed_url.port}"
             ip_switch_list = ip_switch.replace("\n", "").split("\r")
             
-            result = upgrade_so.to_router(ip_switch_list, base_url, so_upgrade, parche_upgrade, user_tacacs, pass_tacacs, download, ip_ftp, pass_ftp)
+            # Preparar datos para Celery
+            switches_data = []
+            for ip in ip_switch_list:
+                if ip.strip():  # Ignorar IPs vacías
+                    switch_data = {
+                        'ip': ip.strip(),
+                        'user_tacacs': user_tacacs,
+                        'pass_tacacs': pass_tacacs,
+                        'ip_ftp': ip_ftp,
+                        'pass_ftp': pass_ftp,
+                        'so_upgrade': so_upgrade,
+                        'parche_upgrade': parche_upgrade,
+                        'download': download
+                    }
+                    switches_data.append(switch_data)
+            
+            # Ejecutar tarea de Celery (VERSIÓN PARALELA)
+            task = upgrade_multiple_switches_parallel_task.delay(switches_data)
+            
+            return Response({
+                'task_id': task.id,
+                'status': 'started',
+                'message': f'Upgrade iniciado para {len(switches_data)} switches',
+                'estimated_time': '4-5 minutos por switch'
+            }, status=status.HTTP_202_ACCEPTED)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['get'])
+    def status(self, request):
+        """
+        Endpoint para consultar el estado de una tarea de upgrade
+        """
+        task_id = request.query_params.get('task_id')
+        if not task_id:
+            return Response(
+                {'error': 'task_id es requerido'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        task_result = AsyncResult(task_id)
+        
+        if task_result.ready():
+            if task_result.successful():
+                return Response({
+                    'task_id': task_id,
+                    'status': 'completed',
+                    'result': task_result.result
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'task_id': task_id,
+                    'status': 'failed',
+                    'error': str(task_result.result)
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        else:
+            # Obtener información de progreso si está disponible
+            info = task_result.info
+            if info:
+                return Response({
+                    'task_id': task_id,
+                    'status': 'in_progress',
+                    'progress': info.get('current', 0),
+                    'total': info.get('total', 100),
+                    'status_message': info.get('status', 'Procesando...')
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'task_id': task_id,
+                    'status': 'pending',
+                    'message': 'Tarea en cola'
+                }, status=status.HTTP_200_OK)
+    
+    @action(detail=False, methods=['post'])
+    def legacy_upgrade(self, request):
+        """
+        Endpoint legacy que usa el método original (para compatibilidad)
+        """
+        serializer = UpgradeSOHuaweiSwitchSerializer(data=request.data)
+        if serializer.is_valid():
+            user_tacacs = serializer.validated_data["user_tacacs"]
+            pass_tacacs = serializer.validated_data["pass_tacacs"]
+            ip_ftp = serializer.validated_data["ip_ftp"]
+            pass_ftp = serializer.validated_data["pass_ftp"]
+            ip_switch = serializer.validated_data["ip_switch"]
+            so_upgrade = serializer.validated_data["so_upgrade"]
+            parche_upgrade = serializer.validated_data["parche_upgrade"]
+            download = serializer.validated_data["download"]
+
+            link = reverse("upgrade-so-huawei-switch-list", request=request)
+            parsed_url = urlparse(link)
+            base_url = f"{parsed_url.scheme}://{parsed_url.hostname}:{parsed_url.port}"
+            ip_switch_list = ip_switch.replace("\n", "").split("\r")
+            
+            # Usar método original
+            result = utils.to_router(ip_switch_list, base_url, so_upgrade, parche_upgrade, user_tacacs, pass_tacacs, download, ip_ftp, pass_ftp)
             return Response(result, status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+
+    @action(detail=False, methods=['post'])
+    def upgrade_parallel_group(self, request):
+        """
+        Endpoint para upgrade PARALELO usando group() (recomendado)
+        """
+        serializer = UpgradeSOHuaweiSwitchSerializer(data=request.data)
+        if serializer.is_valid():
+            user_tacacs = serializer.validated_data["user_tacacs"]
+            pass_tacacs = serializer.validated_data["pass_tacacs"]
+            ip_ftp = serializer.validated_data["ip_ftp"]
+            pass_ftp = serializer.validated_data["pass_ftp"]
+            ip_switch = serializer.validated_data["ip_switch"]
+            so_upgrade = serializer.validated_data["so_upgrade"]
+            parche_upgrade = serializer.validated_data["parche_upgrade"]
+            download = serializer.validated_data["download"]
+
+            link = reverse("upgrade-so-huawei-switch-list", request=request)
+            parsed_url = urlparse(link)
+            base_url = f"{parsed_url.scheme}://{parsed_url.hostname}:{parsed_url.port}"
+            ip_switch_list = ip_switch.replace("\n", "").split("\r")
+            
+            # Preparar datos para Celery
+            switches_data = []
+            for ip in ip_switch_list:
+                if ip.strip():  # Ignorar IPs vacías
+                    switch_data = {
+                        'ip': ip.strip(),
+                        'user_tacacs': user_tacacs,
+                        'pass_tacacs': pass_tacacs,
+                        'ip_ftp': ip_ftp,
+                        'pass_ftp': pass_ftp,
+                        'so_upgrade': so_upgrade,
+                        'parche_upgrade': parche_upgrade,
+                        'download': download
+                    }
+                    switches_data.append(switch_data)
+            
+            # Ejecutar tarea de Celery PARALELA con group()
+            task = upgrade_multiple_switches_parallel_task.delay(switches_data)
+            
+            return Response({
+                'task_id': task.id,
+                'status': 'started',
+                'message': f'Upgrade PARALELO iniciado para {len(switches_data)} switches',
+                'method': 'group() - Procesamiento simultáneo',
+                'estimated_time': '4-5 minutos total (paralelo)'
+            }, status=status.HTTP_202_ACCEPTED)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'])
+    def upgrade_parallel_chord(self, request):
+        """
+        Endpoint para upgrade PARALELO usando chord() (con callback)
+        """
+        serializer = UpgradeSOHuaweiSwitchSerializer(data=request.data)
+        if serializer.is_valid():
+            user_tacacs = serializer.validated_data["user_tacacs"]
+            pass_tacacs = serializer.validated_data["pass_tacacs"]
+            ip_ftp = serializer.validated_data["ip_ftp"]
+            pass_ftp = serializer.validated_data["pass_ftp"]
+            ip_switch = serializer.validated_data["ip_switch"]
+            so_upgrade = serializer.validated_data["so_upgrade"]
+            parche_upgrade = serializer.validated_data["parche_upgrade"]
+            download = serializer.validated_data["download"]
+
+            link = reverse("upgrade-so-huawei-switch-list", request=request)
+            parsed_url = urlparse(link)
+            base_url = f"{parsed_url.scheme}://{parsed_url.hostname}:{parsed_url.port}"
+            ip_switch_list = ip_switch.replace("\n", "").split("\r")
+            
+            # Preparar datos para Celery
+            switches_data = []
+            for ip in ip_switch_list:
+                if ip.strip():  # Ignorar IPs vacías
+                    switch_data = {
+                        'ip': ip.strip(),
+                        'user_tacacs': user_tacacs,
+                        'pass_tacacs': pass_tacacs,
+                        'ip_ftp': ip_ftp,
+                        'pass_ftp': pass_ftp,
+                        'so_upgrade': so_upgrade,
+                        'parche_upgrade': parche_upgrade,
+                        'download': download
+                    }
+                    switches_data.append(switch_data)
+            
+            # Ejecutar tarea de Celery PARALELA con chord()
+            task = upgrade_multiple_switches_chord_task.delay(switches_data)
+            
+            return Response({
+                'task_id': task.id,
+                'status': 'started',
+                'message': f'Upgrade PARALELO con callback iniciado para {len(switches_data)} switches',
+                'method': 'chord() - Procesamiento simultáneo + callback',
+                'estimated_time': '4-5 minutos total (paralelo)'
+            }, status=status.HTTP_202_ACCEPTED)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'])
+    def upgrade_with_rollback(self, request):
+        """
+        Endpoint para upgrade con rollback automático
+        """
+        serializer = UpgradeSOHuaweiSwitchSerializer(data=request.data)
+        if serializer.is_valid():
+            user_tacacs = serializer.validated_data["user_tacacs"]
+            pass_tacacs = serializer.validated_data["pass_tacacs"]
+            ip_ftp = serializer.validated_data["ip_ftp"]
+            pass_ftp = serializer.validated_data["pass_ftp"]
+            ip_switch = serializer.validated_data["ip_switch"]
+            so_upgrade = serializer.validated_data["so_upgrade"]
+            parche_upgrade = serializer.validated_data["parche_upgrade"]
+            download = serializer.validated_data["download"]
+
+            # Preparar datos para upgrade con rollback
+            upgrade_data = {
+                'switch_ip': ip_switch.strip(),
+                'firmware_file': so_upgrade,
+                'user_tacacs': user_tacacs,
+                'pass_tacacs': pass_tacacs,
+                'ip_ftp': ip_ftp,
+                'pass_ftp': pass_ftp
+            }
+            
+            # Ejecutar tarea de Celery con rollback
+            task = upgrade_with_rollback_task.delay(upgrade_data)
+            
+            return Response({
+                'task_id': task.id,
+                'status': 'started',
+                'message': f'Upgrade con rollback iniciado para {ip_switch}',
+                'features': [
+                    'Backup automático de configuración',
+                    'Verificación de salud del switch',
+                    'Rollback automático en caso de fallo',
+                    'Monitoreo en tiempo real'
+                ],
+                'estimated_time': '5-10 minutos'
+            }, status=status.HTTP_202_ACCEPTED)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class UploadCorreosTicketsViewSet(viewsets.ViewSet):
     """
@@ -616,6 +756,7 @@ class ConfigInDeviceViewSet(viewsets.ViewSet):
                 return Response(result, status=status.HTTP_200_OK)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
     
 
 
@@ -669,3 +810,40 @@ class CreateInformeViewSet(viewsets.ViewSet):
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
+
+        
+
+class AnexoDocumentoViewSet(viewsets.ModelViewSet):
+    """
+    Subir los documentos de los anexos
+    """
+    queryset = AnexoDocumento.objects.filter(pk__gt=1)
+    serializer_class = AnexoDocumentoSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = AnexoDocumentoFilters
+
+
+class AnexoAnexoViewSet(viewsets.ModelViewSet):
+    """
+    Ver la lista de Anexos
+    """
+    queryset = AnexoAnexo.objects.filter(pk__gt=1)
+    serializer_class = AnexoAnexoSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = AnexoAnexoFilters
+    pagination_class = AnexoAnexoPagination
+
+
+class AnexoRegistroViewSet(viewsets.ModelViewSet):
+    """
+    Ver los Registos de los anexos
+    """
+    queryset = AnexoRegistro.objects.all()
+    serializer_class = AnexoRegistroSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = AnexoRegistroFilters
+    pagination_class = AnexoRegistroPagination
+

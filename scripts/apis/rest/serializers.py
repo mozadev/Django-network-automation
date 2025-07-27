@@ -1,8 +1,11 @@
 from django.contrib.auth.models import Group, User
 from rest_framework import serializers
-from datetime import datetime, date
-from .models import AnexosRegistros, AnexosUpload
+from datetime import date
+from rest.models import AnexoDocumento, AnexoAnexo, AnexoRegistro
+from rest.utils import process_anexos
+import logging
 
+logger = logging.getLogger(__name__) 
 
 class UserSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
@@ -42,25 +45,6 @@ class SuspensionAndReconnectionSerializer(serializers.Serializer):
     router_pe = serializers.CharField(required=True, label="Equipo PE")
     subinterace_pe = serializers.CharField(required=True, label="Subinterface del PE")
     commit = serializers.ChoiceField(required=True, choices=["N", "Y"], allow_blank=False, html_cutoff=1, initial="N", style={"base_template": "radio.html"}, label="¿Guardar/Commitear loas cambios?")
-
-
-class AnexosUploadCsvSerializer(serializers.Serializer):
-    upload_excel = serializers.FileField(allow_empty_file=False, label="UPLOAD ANEXO")
-    upload_fecha = serializers.DateTimeField(initial=datetime.now(), label="FECHA DE UPLOAD")
-
-
-class AnexosUploadSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AnexosUpload
-        fields = "__all__"
-
-
-
-class AnexosRegistrosSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AnexosRegistros
-        fields = "__all__"
-
 
 
 class InternetUpgradeSerializer(serializers.Serializer):
@@ -180,6 +164,102 @@ class ConfigInDeviceSerializer(serializers.Serializer):
         if value.content_type != 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
             raise serializers.ValidationError("El archivo debe ser de tipo .xlsx")
         return value
+    
+
+class AnexoDocumentoSerializer(serializers.ModelSerializer):
+    usuario_nombre = serializers.CharField(source="usuario.username", read_only=True)
+    class Meta:
+        model = AnexoDocumento
+        fields = "__all__"
+
+    def validate_archivo(self, value):
+        if not value.name.endswith('.csv'):
+            raise serializers.ValidationError("Solo se permiten archivos .csv")
+        if value.content_type != 'text/csv':
+            raise serializers.ValidationError("El archivo debe ser de tipo .csv")
+        return value
+    
+    def create(self, validated_data):
+        read_datos = validated_data.get("archivo")
+        try:
+            datos = process_anexos(read_datos)        
+            for item in datos:
+                item["documento_find"] = 1
+                item["documento"] = 1
+                item["anexo"] = 1
+                serializer_anexo = AnexoAnexoSerializer(data=item)
+                serializer_registro = AnexoRegistroSerializer(data=item)
+
+                if not serializer_anexo.is_valid():
+                    errores = serializer_anexo.errors
+                    key = item["key"]
+                    login = item["login"]
+                    for i, k in errores.items():
+                        if i == "key":
+                            mensaje = str(k[0])
+                            if mensaje != "anexo anexo with this key already exists.":
+                                raise serializers.ValidationError(detail={"ERROR": f"{mensaje} - key: {key}, login: {login}"})
+                        else:
+                            mensaje = str(k[0])
+                            raise serializers.ValidationError(detail={"ERROR": f"{mensaje} - key: {key}, login: {login}"})
+
+                if not serializer_registro.is_valid():
+                    errores = serializer_registro.errors
+                    for i, j in errores.items():
+                        mensaje = str(j[0])
+                        raise serializers.ValidationError(detail={"ERROR": f"{i}: {mensaje}"})
+                    
+            # Loop de guardar
+            save_datos = super().create(validated_data)
+            pk_documento = save_datos.pk
+            for item in datos:
+                item["documento_find"] = pk_documento
+                item["documento"] = pk_documento
+                serializer_anexo = AnexoAnexoSerializer(data=item)
+                serializer_registro = AnexoRegistroSerializer(data=item)
+                if serializer_anexo.is_valid():
+                    instancia = serializer_anexo.save()
+                    item["anexo"] = instancia.pk
+                else:
+                    item["anexo"] = AnexoAnexo.objects.filter(key=item["key"]).first().pk
+
+                if serializer_registro.is_valid():
+                    serializer_registro.save()
+                else:
+                    errores = serializer_registro.errors
+                    for i, j in errores.items():
+                        mensaje = str(j[0])
+                        raise serializers.ValidationError(detail={"ERROR": f"{i}: {mensaje}"})
+
+        except ValueError as e:
+            logger.error(f"{e}")
+            raise serializers.ValidationError(detail={"ERROR": f"{e}"})
+        else:
+            return save_datos
+    
+
+class AnexoAnexoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AnexoAnexo
+        fields = "__all__"
+
+
+class AnexoRegistroSerializer(serializers.ModelSerializer):
+    anexo_key = serializers.IntegerField(source="anexo.key", read_only=True)
+    anexo_login = serializers.EmailField(source="anexo.login", read_only=True)
+    anexo_location = serializers.EmailField(source="anexo.location", read_only=True)
+    anexo_ip_address = serializers.CharField(source="anexo.ip_address", read_only=True)
+    anexo_device_mac = serializers.CharField(source="anexo.device_mac", read_only=True)
+    anexo_device_serial = serializers.CharField(source="anexo.device_serial", read_only=True)
+    documento_creado_en = serializers.DateTimeField(source="documento.creado_en", read_only=True)
+    usuario = serializers.CharField(source="documento.usuario.username", read_only=True)
+
+    class Meta:
+        model = AnexoRegistro
+        fields = "__all__"
+
+
+
     
 
 class CreateInformeSerializer(serializers.Serializer):

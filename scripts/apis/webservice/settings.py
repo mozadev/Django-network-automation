@@ -47,7 +47,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    #'drf_material',
+    'django_filters',
     'rest_framework',
     'corsheaders',
     'rest'
@@ -161,6 +161,7 @@ REST_FRAMEWORK = {
 
     'DEFAULT_SCHEMA_CLASS': 'rest_framework.schemas.openapi.AutoSchema',
 
+    'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
 }
 
 CORS_ORIGIN_ALLOW_ALL = True
@@ -178,3 +179,76 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.getenv("EMAIL_AUTOSEP_USER")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_AUTOSEP_PASS")
+
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "[{asctime}] [{levelname}] {name} ({module}): {message}",
+            "style": "{",
+        },
+        "simple": {
+            "format": "[{levelname}] {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
+        },
+        "file_info": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": os.path.join(BASE_DIR, "logs", "info.log"),
+            "maxBytes": 1024 * 1024 * 5, 
+            "backupCount": 3,
+            "formatter": "verbose",
+            "level": "INFO",
+        },
+        "file_error": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": os.path.join(BASE_DIR, "logs", "errors.log"),
+            "maxBytes": 1024 * 1024 * 5, 
+            "backupCount": 3,
+            "formatter": "verbose",
+            "level": "ERROR",
+        },
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console", "file_info", "file_error"],
+            "level": "INFO",
+            "propagate": True,
+        },
+        "rest": {
+            "handlers": ["console", "file_info", "file_error"],
+            "level": "DEBUG",
+            "propagate": False,
+        }
+    },
+}
+
+# Celery Configuration
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'America/Lima'
+CELERY_ENABLE_UTC = True
+
+# Celery Task Routes
+CELERY_TASK_ROUTES = {
+    'rest.modules.upgrade_so.tasks.*': {'queue': 'upgrade_so'},
+}
+
+# Celery Task Time Limits
+CELERY_TASK_TIME_LIMIT = 7200  # 2 horas máximo
+CELERY_TASK_SOFT_TIME_LIMIT = 6000  # 1 hora 40 minutos soft limit
+
+# Celery Worker Configuration
+CELERY_WORKER_CONCURRENCY = 4
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1

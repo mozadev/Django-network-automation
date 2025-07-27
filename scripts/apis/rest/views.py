@@ -32,7 +32,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from .serializers import UpgradeSOHuaweiSwitchSerializer
 from .modules.upgrade_so import utils
-from .modules.upgrade_so.tasks import upgrade_multiple_switches_task, upgrade_multiple_switches_parallel_task, upgrade_multiple_switches_chord_task, upgrade_with_rollback_task
+from .modules.upgrade_so.tasks import upgrade_multiple_switches_task, upgrade_multiple_switches_parallel_task, upgrade_multiple_switches_chord_task, upgrade_with_rollback_task, upgrade_hierarchical_task
 from celery.result import AsyncResult
 from urllib.parse import urlparse
 from django.urls import reverse
@@ -595,6 +595,66 @@ class UpgradeSOHuaweiSwitchViewSets(viewsets.ViewSet):
                     'Monitoreo en tiempo real'
                 ],
                 'estimated_time': '5-10 minutos'
+            }, status=status.HTTP_202_ACCEPTED)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'])
+    def upgrade_hierarchical(self, request):
+        """
+        Endpoint para upgrade JERÁRQUICO (recomendado para múltiples switches)
+        Un switch principal actúa como servidor FTP local para los demás
+        """
+        serializer = UpgradeSOHuaweiSwitchSerializer(data=request.data)
+        if serializer.is_valid():
+            user_tacacs = serializer.validated_data["user_tacacs"]
+            pass_tacacs = serializer.validated_data["pass_tacacs"]
+            ip_ftp = serializer.validated_data["ip_ftp"]
+            pass_ftp = serializer.validated_data["pass_ftp"]
+            ip_switch = serializer.validated_data["ip_switch"]
+            so_upgrade = serializer.validated_data["so_upgrade"]
+            parche_upgrade = serializer.validated_data["parche_upgrade"]
+            download = serializer.validated_data["download"]
+
+            # Preparar datos para upgrade jerárquico
+            ip_switch_list = ip_switch.replace("\n", "").split("\r")
+            switches_data = []
+            
+            for ip in ip_switch_list:
+                if ip.strip():  # Ignorar IPs vacías
+                    switch_data = {
+                        'ip': ip.strip(),
+                        'user_tacacs': user_tacacs,
+                        'pass_tacacs': pass_tacacs,
+                        'ip_ftp': ip_ftp,
+                        'pass_ftp': pass_ftp,
+                        'so_upgrade': so_upgrade,
+                        'parche_upgrade': parche_upgrade,
+                        'download': download
+                    }
+                    switches_data.append(switch_data)
+            
+            # Ejecutar tarea de Celery JERÁRQUICA
+            task = upgrade_hierarchical_task.delay(switches_data)
+            
+            return Response({
+                'task_id': task.id,
+                'status': 'started',
+                'message': f'Upgrade JERÁRQUICO iniciado para {len(switches_data)} switches',
+                'method': 'Jerárquico - Switch principal como servidor FTP local',
+                'features': [
+                    'Selección automática del mejor switch como servidor',
+                    'Verificación de recursos (RAM/Disco)',
+                    'Distribución optimizada desde switch local',
+                    'Monitoreo de progreso en tiempo real',
+                    'Reducción de carga en servidor FTP externo'
+                ],
+                'estimated_time': '3-5 minutos total (dependiendo del número de switches)',
+                'resource_requirements': {
+                    'min_flash_space': '200MB',
+                    'max_memory_usage': '85%',
+                    'max_cpu_usage': '80%'
+                }
             }, status=status.HTTP_202_ACCEPTED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

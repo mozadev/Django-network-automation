@@ -14,7 +14,7 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-#from django.contrib import admin
+from django.contrib import admin
 #from django.urls import path
 
 #urlpatterns = [
@@ -35,9 +35,6 @@ router = routers.DefaultRouter()
 router.register(r'change-vrf', views.ChangeVRFView, basename="change-vrf")
 router.register(r'change-vrf-from-excel', views.ChangeVrfFromExcelView, basename="change-vrf-from-excel")
 router.register(r'suspension-and-reconnection', views.SuspensionAndReconnectionView, basename="suspension-and-reconnection")
-router.register(r'anexos-upload', views.AnexosUploadCsvViewSet, basename="anexos-upload")
-router.register(r'anexos-upload-dashboard', views.AnexosUploadDashboard, basename="anexos-upload-dashboard")
-router.register(r'anexos-upload-dashboard-v2', views.AnexosUploadDashboard2, basename="anexos-upload-dashboard-v2")
 router.register(r'internet-upgrade', views.InternetUpgrade, basename='internet-upgrade')
 router.register(r'interfaces-status-huawei', views.InterfacesStatusHuaweiViewSets, basename='interfaces-status-huawei')
 router.register(r"read-pst-file", views.ReadCorreosPSTViewSets, basename='read-pst-file')
@@ -48,10 +45,14 @@ router.register(r'read-in-device', views.ReadInDeviceViewSet, basename='read-in-
 router.register(r'get-time-of-reboot', views.GetTimeOfRebootViewSet, basename='get-time-of-reboot')
 router.register(r'config-in-device', views.ConfigInDeviceViewSet, basename='config-in-device')
 router.register(r'create-informe', views.CreateInformeViewSet, basename='create-informe')
+router.register(r'anexo/documento', views.AnexoDocumentoViewSet, basename='anexo-documento')
+router.register(r'anexo/anexo', views.AnexoAnexoViewSet, basename='anexo-anexo')
+router.register(r'anexo/registro', views.AnexoRegistroViewSet, basename='anexo-registro')
 
 # Wire up our API using automatic URL routing.
 # Additionally, we include login URLs for the browsable API.
 urlpatterns = [
+    path('admin/', admin.site.urls),
     path('', include(router.urls)),
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
 ]

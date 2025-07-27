@@ -4,11 +4,15 @@ from dotenv import load_dotenv
 import re
 from datetime import datetime
 import time
+from .tasks import upgrade_multiple_switches_task
 
 # GLOBAL VARIABLES
 TIME_SLEEP = 0.1
 
 def to_router(list_ip_gestion, link, so_upgrade, parche_upgrade, user_tacacs, pass_tacacs, download, ip_ftp, pass_ftp):
+    """
+    Versión optimizada que usa Celery para procesamiento paralelo
+    """
     load_dotenv(override=True)
     CYBERARK_USER = os.getenv("CYBERARK_USER")
     CYBERARK_PASS = os.getenv("CYBERARK_PASS")
@@ -22,33 +26,32 @@ def to_router(list_ip_gestion, link, so_upgrade, parche_upgrade, user_tacacs, pa
     ip_fail = None
 
     try:
-        # Ingreso al Cyberark
-        child = pexpect.spawn(f"ssh -o StrictHostKeyChecking=no {CYBERARK_USER}@{CYBERARK_IP}", timeout=60)
-        child.logfile = open(file_txt, "wb")
-        child.expect("[Pp]assword:")
-        child.sendline(CYBERARK_PASS)
-        child.expect(f"user:")
-        child.sendline(CRT_USER)
-        child.expect(f"address:")
-        child.sendline(CRT_IP)
-        child.expect(r"\]\$")
+        # Preparar datos para Celery
+        switches_data = []
         for ip in list_ip_gestion:
-            item = {}
-            item["ip"] = ip
-            ip_fail = ip
-            result.append(to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade, download, ip_ftp, pass_ftp))
-            time.sleep(5)
-
-        child.send("exit")
-        time.sleep(TIME_SLEEP)
-        child.sendline("")
-        child.close()
-
+            if ip.strip():  # Ignorar IPs vacías
+                switch_data = {
+                    'ip': ip.strip(),
+                    'user_tacacs': user_tacacs,
+                    'pass_tacacs': pass_tacacs,
+                    'ip_ftp': ip_ftp,
+                    'pass_ftp': pass_ftp,
+                    'so_upgrade': so_upgrade,
+                    'parche_upgrade': parche_upgrade,
+                    'download': download
+                }
+                switches_data.append(switch_data)
+        
+        # Ejecutar tarea de Celery
+        task = upgrade_multiple_switches_task.delay(switches_data)
+        
+        # Esperar resultado (opcional, puede ser asíncrono)
+        result = task.get(timeout=7200)  # 2 horas máximo
+        
         return result
-    except pexpect.TIMEOUT:
-        return {"msg": f"ERROR, LA API SE DETUVO EN LA IP {ip_fail}"}
-    except pexpect.ExceptionPexpect:
-        return {"msg": "ERROR, LA API FALLÓ POR CREDENCIALES"}
+        
+    except Exception as e:
+        return {"msg": f"ERROR, LA API FALLÓ: {str(e)}"}
 
 
 def to_switch(child, user_tacacs, pass_tacacs, ip, so_upgrade, parche_upgrade, download, ip_ftp, pass_ftp):

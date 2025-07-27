@@ -301,14 +301,26 @@ class AgentPE(object):
                         timeout=self.timeout, 
                         device="PE"
                         )
-                run_step(child=self.child, 
+                tipo_pe = run_step(child=self.child, 
                         command=self.password,
-                        expected_output=r"\n<[\w\-.]+>", 
+                        expected_output=[PROMP_HUAWEI, PROMP_CISCO],
                         step_name="PE - PASSWORD", 
                         timeout=self.timeout,
                         device="PE"
                         )
-                self.os = "huawei"
+                if tipo_pe == 0:
+                    self.os = "huawei"
+                else:
+                    self.os = "zte"
+                    run_step(child=self.child, 
+                            command="exit",
+                            expected_output=PROMP_CRT,
+                            step_name="PE - EXIT - ZTE", 
+                            timeout=self.timeout,
+                            device="PE"
+                            )
+                    raise CustomPexpectError("INGRESO AL PE", "El PE es ZTE, aún no está implementado", 500, "PE")
+                    
                 run_step(child=self.child, 
                         command=f"screen-length 0 temporary",
                         expected_output=r"\n<[\w\-.]+>", 
@@ -483,6 +495,8 @@ class AgentPE(object):
                 lldp_find = lldp_pattern.search(lldp_output)
                 if lldp_find:
                     self.lldp = lldp_find.group("lldp")
+                    if not self.lldp.lower().startswith("cmetro"):
+                        self.message.append(f"El acceso no es cmetro, es {self.lldp}")
                 else:
                     self.message.append(f"No se encontró lldp para la primera sub-interface {self.interface}")
 
@@ -504,6 +518,8 @@ class AgentPE(object):
                     lldp_find = lldp_pattern.search(lldp_output)
                     if lldp_find:
                         self.lldp = lldp_find.group("lldp")
+                        if not self.lldp.lower().startswith("cmetro"):
+                            self.message.append(f"El acceso no es cmetro, es {self.lldp}")
                     else:
                         self.message.append(f"No se encontró lldp para la primera sub-interface {first_interface_trunk}")
 
@@ -1327,7 +1343,7 @@ class AgentACCESO(object):
     def enter(self):
         try:
             pattern = re.compile("huawei", re.IGNORECASE)
-            if  self.vendor and pattern.search(self.vendor) and self.acceso:
+            if  self.vendor and pattern.search(self.vendor) and self.acceso and self.acceso.lower().startswith("cmetro"):
                 run_step(child=self.child, 
                         command=f"ssh -o StrictHostKeyChecking=no {self.username}@{self.acceso}", 
                         expected_output=r"[Pp]assword:", 
@@ -1375,7 +1391,8 @@ class AgentACCESO(object):
                 sysname_pattern_find = sysname_pattern.search(sysname_output)
                 if sysname_pattern_find:
                     self.hostname = sysname_pattern_find.group("sysname")
-
+            else:
+                return None
         except CustomPexpectError as e:
             return e
         else:
